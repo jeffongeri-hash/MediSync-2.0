@@ -1,0 +1,145 @@
+// MediSync data model. Synthetic data only.
+// Raw sources are stored untouched; canonical resources are FHIR R4 JSON derived from them.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum SourceFormat {
+  FHIR_BUNDLE
+  FHIR_NDJSON
+  CCDA
+}
+
+enum IssueSeverity {
+  INFO
+  WARNING
+  ERROR
+}
+
+enum IssueStatus {
+  OPEN
+  RESOLVED
+  IGNORED
+}
+
+enum AuditAction {
+  READ
+  CREATE
+  UPDATE
+  DELETE
+  EXPORT
+}
+
+/// Patient index. Demographics are a convenience copy; the canonical Patient resource is the source of truth.
+model Patient {
+  id              String    @id @default(uuid()) @db.Uuid
+  sourceSystem    String    @map("source_system")
+  sourcePatientId String    @map("source_patient_id")
+  displayName     String?   @map("display_name")
+  birthDate       DateTime? @map("birth_date") @db.Date
+  gender          String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  sourceRecords      SourceRecord[]
+  canonicalResources CanonicalResource[]
+  mappingIssues      MappingIssue[]
+
+  @@unique([sourceSystem, sourcePatientId])
+  @@map("patients")
+}
+
+/// One received document (bundle, NDJSON file, C-CDA). raw_text is the exact original text, never modified.
+model SourceRecord {
+  id             String       @id @default(uuid()) @db.Uuid
+  patientId      String?      @map("patient_id") @db.Uuid
+  format         SourceFormat
+  sourceSystem   String       @map("source_system")
+  sourceRecordId String?      @map("source_record_id")
+  filename       String?
+  contentType    String       @map("content_type")
+  rawText        String       @map("raw_text")
+  sha256         String       @unique
+  byteSize       Int          @map("byte_size")
+  /// Derived at ingest (e.g. resource counts). Never a substitute for raw_text.
+  summary        Json?
+  receivedAt     DateTime     @default(now()) @map("received_at")
+
+  patient            Patient?            @relation(fields: [patientId], references: [id])
+  canonicalResources CanonicalResource[]
+  mappingIssues      MappingIssue[]
+
+  @@index([patientId])
+  @@map("source_records")
+}
+
+/// FHIR R4 resource in the canonical model, with provenance back to its source record.
+model CanonicalResource {
+  id             String   @id @default(uuid()) @db.Uuid
+  patientId      String   @map("patient_id") @db.Uuid
+  sourceRecordId String   @map("source_record_id") @db.Uuid
+  resourceType   String   @map("resource_type")
+  fhirId         String   @map("fhir_id")
+  fhirVersion    String   @default("4.0.1") @map("fhir_version")
+  resource       Json
+  /// Location in the raw source, e.g. "Bundle.entry[12]" or an XPath.
+  sourcePath     String?  @map("source_path")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  patient       Patient        @relation(fields: [patientId], references: [id])
+  sourceRecord  SourceRecord   @relation(fields: [sourceRecordId], references: [id])
+  mappingIssues MappingIssue[]
+
+  @@unique([sourceRecordId, resourceType, fhirId])
+  @@index([patientId, resourceType])
+  @@map("canonical_resources")
+}
+
+/// Review queue: validation failures, unmapped codes, lossy conversions. Nothing is silently dropped.
+model MappingIssue {
+  id                  String        @id @default(uuid()) @db.Uuid
+  patientId           String?       @map("patient_id") @db.Uuid
+  sourceRecordId      String        @map("source_record_id") @db.Uuid
+  canonicalResourceId String?       @map("canonical_resource_id") @db.Uuid
+  severity            IssueSeverity
+  code                String
+  message             String
+  path                String?
+  details             Json?
+  status              IssueStatus   @default(OPEN)
+  resolvedBy          String?       @map("resolved_by")
+  resolvedAt          DateTime?     @map("resolved_at")
+  createdAt           DateTime      @default(now()) @map("created_at")
+
+  patient           Patient?           @relation(fields: [patientId], references: [id])
+  sourceRecord      SourceRecord       @relation(fields: [sourceRecordId], references: [id])
+  canonicalResource CanonicalResource? @relation(fields: [canonicalResourceId], references: [id])
+
+  @@index([status, code])
+  @@index([patientId])
+  @@map("mapping_issues")
+}
+
+/// Append-only (enforced by trigger). No FKs so entries outlive the rows they describe. details must not hold PHI.
+model AuditLog {
+  id         BigInt      @id @default(autoincrement())
+  occurredAt DateTime    @default(now()) @map("occurred_at")
+  actor      String
+  action     AuditAction
+  patientId  String?     @map("patient_id") @db.Uuid
+  entityType String      @map("entity_type")
+  entityId   String?     @map("entity_id")
+  source     String?
+  details    Json?
+
+  @@index([patientId, occurredAt])
+  @@index([occurredAt])
+  @@map("audit_log")
+}
