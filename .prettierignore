@@ -1,0 +1,4 @@
+fixtures/
+src/generated/
+pnpm-lock.yaml
+prisma/migrations/
