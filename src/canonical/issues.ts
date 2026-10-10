@@ -61,11 +61,7 @@ export function aggregateInfo(issues: IngestIssue[]): IngestIssue[] {
     if (g) {
       g.details.count = Number(g.details.count) + 1;
     } else {
-      const agg = {
-        ...i,
-        fhirId: undefined,
-        details: { ...i.details, count: 1, firstPath: i.path ?? null },
-      };
+      const agg = { ...i, fhirId: undefined, details: { ...i.details, count: 1, firstPath: i.path ?? null } };
       groups.set(key, agg);
       out.push(agg);
     }
