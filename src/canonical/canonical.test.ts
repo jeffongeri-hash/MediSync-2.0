@@ -28,7 +28,9 @@ describe("toCanonical", () => {
   it("enforces choice[x] cardinality", () => {
     const both = { resourceType: "MedicationRequest", id: "m", status: "active", intent: "order", subject, medicationCodeableConcept: snomed("1"), medicationReference: { reference: "Medication/1" } };
     expect(toCanonical(both, "p").issues[0]!.message).toMatch(/medication\[x\]: exactly one required/);
-    const { medicationCodeableConcept: _a, medicationReference: _b, ...none } = both;
+    const none: Record<string, unknown> = { ...both };
+    delete none.medicationCodeableConcept;
+    delete none.medicationReference;
     expect(toCanonical(none, "p").issues[0]!.code).toBe("schema_invalid");
   });
 

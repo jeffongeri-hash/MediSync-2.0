@@ -1,0 +1,37 @@
+{
+  "resourceType": "Bundle",
+  "id": "test-bundle-1",
+  "type": "transaction",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:p-0001",
+      "resource": { "resourceType": "Patient", "id": "p-0001", "name": [{ "family": "Testcase1", "given": ["Synth"] }], "gender": "female", "birthDate": "1980-02-03" },
+      "request": { "method": "POST", "url": "Patient" }
+    },
+    {
+      "fullUrl": "urn:uuid:enc-1",
+      "resource": { "resourceType": "Encounter", "id": "enc-1", "status": "finished", "class": { "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "AMB" }, "subject": { "reference": "urn:uuid:p-0001" }, "participant": [{ "individual": { "reference": "Practitioner?identifier=http://hl7.org/fhir/sid/us-npi|9990000001" } }], "period": { "start": "2024-01-01T10:00:00+00:00", "end": "2024-01-01T10:30:00+00:00" } },
+      "request": { "method": "POST", "url": "Encounter" }
+    },
+    {
+      "fullUrl": "urn:uuid:cond-1",
+      "resource": { "resourceType": "Condition", "id": "cond-1", "subject": { "reference": "urn:uuid:p-0001" }, "encounter": { "reference": "urn:uuid:enc-1" }, "code": { "coding": [{ "system": "http://snomed.info/sct", "code": "44054006", "display": "Diabetes mellitus type 2" }] }, "onsetDateTime": "2024-01-01T10:00:00+00:00" },
+      "request": { "method": "POST", "url": "Condition" }
+    },
+    {
+      "fullUrl": "urn:uuid:obs-bad",
+      "resource": { "resourceType": "Observation", "id": "obs-bad", "status": "done", "code": { "text": "glucose" }, "subject": { "reference": "urn:uuid:p-0001" } },
+      "request": { "method": "POST", "url": "Observation" }
+    },
+    {
+      "fullUrl": "urn:uuid:proc-1",
+      "resource": { "resourceType": "Procedure", "id": "proc-1", "status": "completed", "code": { "text": "hand-written procedure note" }, "subject": { "reference": "urn:uuid:p-0001" }, "encounter": { "reference": "urn:uuid:missing-enc" } },
+      "request": { "method": "POST", "url": "Procedure" }
+    },
+    {
+      "fullUrl": "urn:uuid:claim-1",
+      "resource": { "resourceType": "Claim", "id": "claim-1", "patient": { "reference": "urn:uuid:p-0001" } },
+      "request": { "method": "POST", "url": "Claim" }
+    }
+  ]
+}
