@@ -9,3 +9,14 @@
 - `/demo` is server-rendered with no client JS, so `pnpm demo:snapshot` yields a faithful static copy; fonts load from a Google Fonts link (not next/font) for the same reason.
 - Every `/demo` view writes one READ audit entry per patient shown.
 - E2E (Playwright) runs in CI against `next start`; locally against `next dev`.
+- Phase 1 canonical scope: Patient, Condition, MedicationRequest/Statement, AllergyIntolerance, Observation, Immunization, Procedure, Encounter, DocumentReference. Other types stay raw and are reported (INFO `unsupported_resource`).
+- Canonical Zod schemas are loose (unknown fields kept) but enforce R4 required fields, status codes, primitive formats and choice[x] cardinality; an invalid resource is an ERROR with no canonical row (raw kept).
+- INFO issues are aggregated per source (code + type + message, `details.count`); WARNING and ERROR stay one row per item for the review queue.
+- C-CDA to FHIR is a hand-written TS mapper (fast-xml-parser) dispatched on entry templateId; unknown templates are WARNING `unmapped_section`, never dropped silently.
+- C-CDA entry ids: the id root when it is a valid FHIR id (Synthea reuses FHIR UUIDs, so formats line up), else `ccda-<sha256>`; deterministic either way.
+- C-CDA timestamps without an offset are taken as UTC (INFO `timezone_assumed_utc`); C-CDA Encounter.class is set to v3-NullFlavor UNK (INFO `defaulted_field`).
+- NDJSON fixtures are generated from the committed bundles (`pnpm ndjson`): canonical types only, like `$export?_type=`, references rewritten to `Type/id`.
+- Patient index rows come from the canonical Patient of any format, keyed by (source_system, Patient.id); multi-patient NDJSON sources have no patient_id and rows are attributed via subject/patient.
+- A source is parsed once (`parsed_at`, `parser_version`); a resource not attributable to a known patient is WARNING `unknown_patient` and not stored.
+- Same Type/id twice in one source: first kept; identical copies INFO, differing copies WARNING `duplicate_in_source`.
+- Audit entries use a strict schema, so a misspelled field fails loudly instead of being dropped.

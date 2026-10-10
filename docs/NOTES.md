@@ -10,7 +10,10 @@ build container's network policy. Re-check when those hosts are reachable, and n
   Sources (secondary): https://chat-archive.fhir.org/stream/179166-implementers/topic/EPIC.20FHIR.20rest.20API.html ,
   https://central.ballerina.io/ballerinax/health.clients.fhir.epic/1.0.2
 - Bulk Data ($export, NDJSON), C-CDA, USCDI, TEFCA: standard; versions unverified (check the Bulk Data IG and
-  SMART App Launch v2 PKCE/scope rules before Phase 1 NDJSON and Phase 5 respectively).
+  SMART App Launch v2 PKCE/scope rules before Phase 5). Phase 1 NDJSON follows the general convention (one
+  resource type per file, literal `Type/id` references) without an IG check: hl7.org still blocked on 2026-10-10.
+- C-CDA OID -> FHIR system URIs (`src/ingest/ccda/datatypes.ts`) and the US Core race/ethnicity extension shape
+  are from memory of FHIR R4 / US Core, not checked against hl7.org. Verify when reachable.
 - Compliance (HIPAA, BAAs incl. AI vendor, SOC 2, Epic security review): later phases, unchanged.
 
 ## Synthea
@@ -24,8 +27,14 @@ build container's network policy. Re-check when those hosts are reachable, and n
 - Synthea emits one DocumentReference per Encounter, and heavy Claim/ExplanationOfBenefit volume.
 - Names carry digits (Corie618) by design, which marks them as synthetic.
 - FHIR output verified byte-identical across two runs (same jar, seed, reference date). C-CDA not checked.
+- C-CDA (Phase 1 findings): entry `<id root>` equals the FHIR resource id; timestamps carry no UTC offset but match
+  the bundles' UTC times; 35 result values are the literal placeholder `{entry.value}` (Synthea template bug, now
+  a WARNING); survey scores appear in both Results and Functional Status (46 WARNING duplicates); encounters have
+  no class or status; Plan of Care sections are empty. C-CDA has 734 Observations vs 843 in the bundles.
 
 ## Tooling
 - Prisma 7: connection URL lives in `prisma.config.ts`; the client needs the `@prisma/adapter-pg` driver
   adapter; the generated client is in `src/generated/prisma` (gitignored, built on `postinstall`).
+- Prisma 7 `migrate dev` did not regenerate the client here; run `pnpm db:generate` after a schema change.
+- `next dev` (used by local e2e) writes an untracked AGENTS.md; it is not part of the repo.
 - Playwright pinned to 1.56.1 to match the container's preinstalled Chromium (revision 1194).

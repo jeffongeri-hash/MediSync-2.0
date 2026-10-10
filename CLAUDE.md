@@ -30,7 +30,8 @@ Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient
 - `pnpm dev` (app at :3000, demo at /demo) · `pnpm build`
 - `pnpm test` (Vitest; DB tests need DATABASE_URL) · `pnpm test:e2e` (Playwright) · `pnpm lint` · `pnpm typecheck`
 - `pnpm db:migrate` (new migration) · `pnpm db:deploy` (apply) · `pnpm db:seed` (idempotent Synthea load)
-- `pnpm synthea` (regenerate fixtures; needs Java) · `pnpm demo:snapshot [baseUrl] [out]` (static /demo copy)
+- `pnpm synthea` (regenerate fixtures; needs Java) · `pnpm ndjson` (rebuild NDJSON fixtures from the bundles)
+- `pnpm ingest:report [out.md]` (per-patient issue report) · `pnpm demo:snapshot [baseUrl] [out]` (static /demo copy)
 
 ## Conventions
 - Canonical internal model = FHIR R4 resources validated with Zod. All sources map INTO it; all exports map OUT of it.

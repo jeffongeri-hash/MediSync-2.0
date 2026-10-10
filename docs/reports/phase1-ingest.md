@@ -1,6 +1,6 @@
 # Ingest issue report
 
-Generated 2026-10-10T07:26:54.268Z by parser phase1.1. Synthetic data only; patients are shown by source id prefix.
+Generated 2026-10-10T07:28:12.621Z by parser phase1.1. Synthetic data only; patients are shown by source id prefix.
 
 - Patients: 10; fully ingested in all three formats: 10
 - Canonical resources: Bundle 2031, NDJSON 2031, C-CDA 1730
