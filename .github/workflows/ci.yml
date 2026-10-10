@@ -37,6 +37,8 @@ jobs:
       - run: pnpm db:deploy
       - run: pnpm db:seed
       - run: pnpm test --reporter=dot
+      - name: Ingest issue report
+        run: pnpm -s ingest:report >> "$GITHUB_STEP_SUMMARY"
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e

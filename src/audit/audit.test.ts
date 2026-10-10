@@ -25,3 +25,11 @@ describe("recordAudit", () => {
     expect(createMany).not.toHaveBeenCalled();
   });
 });
+
+describe("auditEntrySchema", () => {
+  it("rejects unknown keys instead of silently dropping them", async () => {
+    const createMany = vi.fn();
+    const entry = { actor: "u", action: "CREATE", entityType: "Patient", sourceSystem: "typo" };
+    await expect(recordAudit({ auditLog: { createMany } }, entry as never)).rejects.toThrow();
+  });
+});

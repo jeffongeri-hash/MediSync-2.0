@@ -1,14 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Db } from "@/db";
-import type { Prisma } from "@/generated/prisma/client";
-import { recordAudit, type AuditEntry } from "@/audit";
-import {
-  sha256,
-  summarizeCcda,
-  summarizeFhirBundle,
-  syntheaPatientIdFromFilename,
-} from "@/ingest/source-summary";
+import { ingestSource, type IngestOutcome, type SourceInput } from "@/ingest/ingest";
+import { summarizeCcda, summarizeFhirBundle } from "@/ingest/source-summary";
+import { sharedReferenceIndex } from "@/ingest/to-ndjson";
 
 export const SYNTHEA_SOURCE = "synthea";
 
@@ -16,6 +11,8 @@ export type SeedResult = {
   patientsCreated: number;
   sourceRecordsCreated: number;
   sourceRecordsSkipped: number;
+  sourcesParsed: number;
+  canonicalCreated: number;
 };
 
 async function listFiles(dir: string, ext: string): Promise<string[]> {
@@ -24,120 +21,57 @@ async function listFiles(dir: string, ext: string): Promise<string[]> {
 }
 
 /**
- * Loads Synthea output (fhir/*.json, ccda/*.xml) as untouched source records plus a patient index.
- * Idempotent: files are keyed by sha256, patients by (source system, Patient.id).
+ * Loads Synthea output (fhir/*.json, ndjson/*.ndjson, ccda/*.xml): raw sources untouched, canonical resources,
+ * mapping issues and audit entries. Idempotent: sources are keyed by sha256, patients by (source system, Patient.id).
  */
 export async function seedSynthea(db: Db, dir: string, actor = "system:seed"): Promise<SeedResult> {
-  const result: SeedResult = { patientsCreated: 0, sourceRecordsCreated: 0, sourceRecordsSkipped: 0 };
+  const result: SeedResult = { patientsCreated: 0, sourceRecordsCreated: 0, sourceRecordsSkipped: 0, sourcesParsed: 0, canonicalCreated: 0 };
+  const tally = (o: IngestOutcome) => {
+    result.patientsCreated += o.patientsCreated;
+    result.canonicalCreated += o.canonicalCount;
+    if (o.created) result.sourceRecordsCreated++;
+    else if (!o.parsed) result.sourceRecordsSkipped++;
+    if (o.parsed) result.sourcesParsed++;
+  };
+  const base = { sourceSystem: SYNTHEA_SOURCE };
 
-  // FHIR first so C-CDA documents can attach to the patients they describe.
-  for (const filename of await listFiles(join(dir, "fhir"), ".json")) {
-    const bytes = await readFile(join(dir, "fhir", filename));
-    const rawText = bytes.toString("utf8");
-    const summary = summarizeFhirBundle(rawText);
-    await ingestFile(db, result, actor, {
-      filename,
-      bytes,
-      rawText,
+  // FHIR bundles. Shared (no Patient) bundles first: they resolve the patient bundles' conditional references.
+  const bundles = await Promise.all(
+    (await listFiles(join(dir, "fhir"), ".json")).map(async (filename) => {
+      const bytes = await readFile(join(dir, "fhir", filename));
+      return { filename, bytes, summary: summarizeFhirBundle(bytes.toString("utf8")) };
+    }),
+  );
+  const shared = bundles.filter((b) => !b.summary.patient);
+  const refIndex = sharedReferenceIndex(shared.map((b) => b.bytes.toString("utf8")));
+  for (const b of [...shared, ...bundles.filter((x) => x.summary.patient)]) {
+    const input: SourceInput = {
+      ...base,
       format: "FHIR_BUNDLE",
+      filename: b.filename,
+      bytes: b.bytes,
       contentType: "application/fhir+json",
-      sourceRecordId: summary.bundleId,
-      summary,
-      patient: summary.patient,
-    });
+      sourceRecordId: b.summary.bundleId,
+      summary: b.summary,
+      refIndex,
+    };
+    tally(await ingestSource(db, input, actor));
+  }
+
+  // Bulk Data NDJSON, Patient first so other types can be attributed.
+  const ndjson = (await listFiles(join(dir, "ndjson"), ".ndjson")).sort((a, b) => Number(b === "Patient.ndjson") - Number(a === "Patient.ndjson"));
+  for (const filename of ndjson) {
+    const bytes = await readFile(join(dir, "ndjson", filename));
+    const lineCount = bytes.toString("utf8").split("\n").filter((l) => l.trim()).length;
+    const summary = { resourceType: filename.replace(/\.ndjson$/, ""), lineCount };
+    tally(await ingestSource(db, { ...base, format: "FHIR_NDJSON", filename, bytes, contentType: "application/fhir+ndjson", summary }, actor));
   }
 
   for (const filename of await listFiles(join(dir, "ccda"), ".xml")) {
     const bytes = await readFile(join(dir, "ccda", filename));
-    const rawText = bytes.toString("utf8");
-    const patientUuid = syntheaPatientIdFromFilename(filename);
-    await ingestFile(db, result, actor, {
-      filename,
-      bytes,
-      rawText,
-      format: "CCDA",
-      contentType: "application/xml",
-      sourceRecordId: null,
-      summary: summarizeCcda(rawText),
-      patient: patientUuid ? { id: patientUuid } : null,
-    });
+    const summary = summarizeCcda(bytes.toString("utf8"));
+    tally(await ingestSource(db, { ...base, format: "CCDA", filename, bytes, contentType: "application/xml", summary }, actor));
   }
 
   return result;
-}
-
-type FileInput = {
-  filename: string;
-  bytes: Buffer;
-  rawText: string;
-  format: "FHIR_BUNDLE" | "CCDA";
-  contentType: string;
-  sourceRecordId: string | null;
-  summary: object;
-  patient: { id: string; displayName?: string | null; birthDate?: string | null; gender?: string | null } | null;
-};
-
-async function ingestFile(db: Db, result: SeedResult, actor: string, input: FileInput): Promise<void> {
-  const hash = sha256(input.bytes);
-  if (await db.sourceRecord.findUnique({ where: { sha256: hash }, select: { id: true } })) {
-    result.sourceRecordsSkipped++;
-    return;
-  }
-
-  await db.$transaction(async (tx) => {
-    const audit: AuditEntry[] = [];
-    let patientId: string | null = null;
-
-    if (input.patient) {
-      const key = { sourceSystem: SYNTHEA_SOURCE, sourcePatientId: input.patient.id };
-      const existing = await tx.patient.findUnique({
-        where: { sourceSystem_sourcePatientId: key },
-        select: { id: true },
-      });
-      if (existing) {
-        patientId = existing.id;
-      } else if (input.format === "FHIR_BUNDLE") {
-        const created = await tx.patient.create({
-          data: {
-            ...key,
-            displayName: input.patient.displayName ?? null,
-            birthDate: input.patient.birthDate ? new Date(input.patient.birthDate) : null,
-            gender: input.patient.gender ?? null,
-          },
-          select: { id: true },
-        });
-        patientId = created.id;
-        result.patientsCreated++;
-        audit.push({ actor, action: "CREATE", patientId, entityType: "Patient", entityId: patientId, source: SYNTHEA_SOURCE });
-      }
-    }
-
-    const record = await tx.sourceRecord.create({
-      data: {
-        patientId,
-        format: input.format,
-        sourceSystem: SYNTHEA_SOURCE,
-        sourceRecordId: input.sourceRecordId,
-        filename: input.filename,
-        contentType: input.contentType,
-        rawText: input.rawText,
-        sha256: hash,
-        byteSize: input.bytes.length,
-        summary: input.summary as Prisma.InputJsonValue,
-      },
-      select: { id: true },
-    });
-    result.sourceRecordsCreated++;
-    audit.push({
-      actor,
-      action: "CREATE",
-      patientId,
-      entityType: "SourceRecord",
-      entityId: record.id,
-      source: SYNTHEA_SOURCE,
-      details: { format: input.format, byteSize: input.bytes.length },
-    });
-
-    await recordAudit(tx, audit);
-  });
 }

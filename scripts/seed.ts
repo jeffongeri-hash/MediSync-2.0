@@ -9,7 +9,8 @@ const db = createDb();
 seedSynthea(db, dir)
   .then((r) => {
     console.log(
-      `seed: ${r.patientsCreated} patients created, ${r.sourceRecordsCreated} source records created, ${r.sourceRecordsSkipped} unchanged`,
+      `seed: ${r.patientsCreated} patients created, ${r.sourceRecordsCreated} source records created, ` +
+        `${r.sourcesParsed} parsed (${r.canonicalCreated} canonical resources), ${r.sourceRecordsSkipped} unchanged`,
     );
   })
   .catch((err: unknown) => {

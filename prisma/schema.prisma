@@ -70,6 +70,9 @@ model SourceRecord {
   /// Derived at ingest (e.g. resource counts). Never a substitute for raw_text.
   summary        Json?
   receivedAt     DateTime     @default(now()) @map("received_at")
+  /// Set once canonical rows and issues exist for this source. Raw is immutable; derived rows are not re-made.
+  parsedAt       DateTime?    @map("parsed_at")
+  parserVersion  String?      @map("parser_version")
 
   patient            Patient?            @relation(fields: [patientId], references: [id])
   canonicalResources CanonicalResource[]

@@ -22,7 +22,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "synthea": "bash scripts/synthea.sh",
     "demo:snapshot": "tsx scripts/snapshot-demo.ts",
-    "ndjson": "tsx scripts/make-ndjson.ts"
+    "ndjson": "tsx scripts/make-ndjson.ts",
+    "ingest:report": "tsx scripts/ingest-report.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

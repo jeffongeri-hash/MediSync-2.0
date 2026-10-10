@@ -3,7 +3,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { AuditAction } from "@/generated/prisma/enums";
 
 /** One audit entry. `details` is for ids, counts and reasons only, never PHI. */
-export const auditEntrySchema = z.object({
+export const auditEntrySchema = z.strictObject({
   actor: z.string().min(1),
   action: z.enum(AuditAction),
   patientId: z.uuid().nullish(),
