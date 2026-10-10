@@ -39,6 +39,8 @@ jobs:
       - run: pnpm test --reporter=dot
       - name: Ingest issue report
         run: pnpm -s ingest:report >> "$GITHUB_STEP_SUMMARY"
+      - name: Mapping coverage report
+        run: pnpm -s mapping:report >> "$GITHUB_STEP_SUMMARY"
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e

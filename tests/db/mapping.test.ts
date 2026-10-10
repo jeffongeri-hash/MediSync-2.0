@@ -5,6 +5,7 @@ import { createDb } from "@/db";
 import { ingestSource } from "@/ingest/ingest";
 import { SYNTHEA_SOURCE, seedSynthea } from "@/ingest/seed";
 import { MAPPING_VERSION } from "@/mapping/map-resource";
+import { loadMappingReportInput, renderMappingReport } from "@/mapping/report";
 import { runMapping } from "@/mapping/run";
 
 // Phase 2: invariants of the mapping pass over the seeded Synthea data. Safe on a dev database (idempotent).
@@ -78,6 +79,14 @@ describe.skipIf(!process.env.DATABASE_URL)("mapping pass (database)", () => {
       expect(primary?.sourceRecord.format, r.id).toBe("FHIR_BUNDLE");
       expect(primary?.patientId).toBe(r.patientId);
     }
+  });
+
+  it("passes the Phase 2 gate: coverage report renders and no unmapped finding is missing from the queue", async () => {
+    const input = await loadMappingReportInput(db, SYNTHEA_SOURCE, MAPPING_VERSION);
+    expect(input.notQueued).toEqual({ unmappedRows: 0, conditionsWithoutIcd: 0 });
+    const md = renderMappingReport(input);
+    expect(md).toContain("missing from the review queue: 0 (pass)");
+    expect(md).toContain("| Condition | 405 | 405 | 0 | 0 | 100.0% | 52 |");
   });
 
   it("keeps a reviewer's decision when everything is re-mapped", async () => {
