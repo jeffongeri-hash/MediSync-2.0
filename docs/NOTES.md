@@ -36,5 +36,5 @@ build container's network policy. Re-check when those hosts are reachable, and n
 - Prisma 7: connection URL lives in `prisma.config.ts`; the client needs the `@prisma/adapter-pg` driver
   adapter; the generated client is in `src/generated/prisma` (gitignored, built on `postinstall`).
 - Prisma 7 `migrate dev` did not regenerate the client here; run `pnpm db:generate` after a schema change.
-- `next dev` (used by local e2e) writes an untracked AGENTS.md; it is not part of the repo.
+- `next dev` writes AGENTS.md (Next.js agent notes) and re-creates it if deleted, so it is committed.
 - Playwright pinned to 1.56.1 to match the container's preinstalled Chromium (revision 1194).
