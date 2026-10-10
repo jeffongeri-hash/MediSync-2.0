@@ -13,6 +13,7 @@ export type ParseResult = { resources: ParsedResource[]; issues: IngestIssue[] }
 
 export function sourcePatientIdOf(resource: CanonicalResource): string | null {
   if (resource.resourceType === "Patient") return resource.id;
+  if (resource.resourceType === "Medication") return null;
   return patientIdOf((resource as Record<string, unknown>)[PATIENT_FIELD[resource.resourceType]]);
 }
 

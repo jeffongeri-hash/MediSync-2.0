@@ -10,7 +10,7 @@ import type { ReferenceIndex } from "@/ingest/references";
 import { sha256 } from "@/ingest/source-summary";
 
 /** Bump when parser output changes in a way that matters for already-parsed sources. */
-export const PARSER_VERSION = "phase1.1";
+export const PARSER_VERSION = "phase2.0";
 
 export type SourceInput = {
   format: SourceFormat;
@@ -43,6 +43,33 @@ function displayName(p: Record<string, unknown>): string | null {
   const names = (p.name ?? []) as { use?: string; given?: string[]; family?: string }[];
   const n = names.find((x) => x.use === "official") ?? names[0];
   return n ? [...(n.given ?? []), n.family].filter(Boolean).join(" ") || null : null;
+}
+
+type Tx = Parameters<Parameters<Db["$transaction"]>[0]>[0];
+
+/**
+ * Medication has no patient field, so it belongs to the patient whose MedicationRequest/Statement references it:
+ * one in this source, or (Bulk Data, one file per type) one already ingested from the same source system.
+ */
+async function medicationPatients(tx: Tx, sourceSystem: string, resources: ParsedResource[], patientIds: Map<string, string>): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const meds = resources.filter((r) => r.resource.resourceType === "Medication").map((r) => `Medication/${r.resource.id}`);
+  if (!meds.length) return out;
+  for (const r of resources) {
+    const ref = (r.resource as { medicationReference?: { reference?: string } }).medicationReference?.reference;
+    const patientId = r.sourcePatientId ? patientIds.get(r.sourcePatientId) : undefined;
+    if (ref && patientId && !out.has(ref)) out.set(ref, patientId);
+  }
+  const missing = meds.filter((m) => !out.has(m));
+  if (missing.length) {
+    const rows = await tx.$queryRaw<{ ref: string; patient_id: string }[]>`
+      select distinct on (ref) c.resource->'medicationReference'->>'reference' as ref, c.patient_id
+      from canonical_resources c join source_records s on s.id = c.source_record_id
+      where s.source_system = ${sourceSystem} and c.resource_type in ('MedicationRequest', 'MedicationStatement')
+        and c.resource->'medicationReference'->>'reference' = any(${missing})`;
+    for (const r of rows) out.set(r.ref, r.patient_id);
+  }
+  return out;
 }
 
 /**
@@ -123,6 +150,7 @@ export async function ingestSource(db: Db, input: SourceInput, actor: string): P
       }
 
       // Attribute, de-duplicate, and assign ids so issues can point at their canonical row.
+      const medPatient = await medicationPatients(tx, input.sourceSystem, parsed.resources, patientIds);
       const issues: IngestIssue[] = [...parsed.issues];
       const rows: (ParsedResource & { id: string; patientId: string })[] = [];
       const seen = new Map<string, string>();
@@ -130,7 +158,7 @@ export async function ingestSource(db: Db, input: SourceInput, actor: string): P
       for (const r of parsed.resources) {
         const { resourceType, id: fhirId } = r.resource;
         const key = `${resourceType}/${fhirId}`;
-        const patientId = r.sourcePatientId ? patientIds.get(r.sourcePatientId) : undefined;
+        const patientId = resourceType === "Medication" ? medPatient.get(key) : r.sourcePatientId ? patientIds.get(r.sourcePatientId) : undefined;
         if (seen.has(key)) {
           const same = JSON.stringify(firstByKey.get(key)) === JSON.stringify(r.resource);
           issues.push(

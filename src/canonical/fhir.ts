@@ -61,6 +61,13 @@ const condition = z
   .superRefine(choice("onset"))
   .superRefine(choice("abatement"));
 
+/** Has no patient field: ingest attributes it through the MedicationRequest/Statement that references it. */
+const medication = z.looseObject({
+  ...base("Medication"),
+  code: codeableConcept.optional(),
+  status: z.enum(["active", "inactive", "entered-in-error"]).optional(),
+});
+
 const medicationRequest = z
   .looseObject({
     ...base("MedicationRequest"),
@@ -169,10 +176,11 @@ const documentReference = z.looseObject({
   content: z.array(z.looseObject({ attachment })).min(1),
 });
 
-/** The Phase 1 canonical resource scope (BUILD_PLAN). Everything else is kept raw and reported. */
+/** The canonical resource scope (BUILD_PLAN Phase 1, plus Medication in Phase 2). Everything else is kept raw and reported. */
 export const canonicalSchemas = {
   Patient: patient,
   Condition: condition,
+  Medication: medication,
   MedicationRequest: medicationRequest,
   MedicationStatement: medicationStatement,
   AllergyIntolerance: allergyIntolerance,
@@ -192,7 +200,7 @@ export function isCanonicalType(t: string): t is CanonicalType {
 }
 
 /** Where each type points at its patient, used to attribute resources from multi-patient sources (NDJSON). */
-export const PATIENT_FIELD: Record<Exclude<CanonicalType, "Patient">, "subject" | "patient"> = {
+export const PATIENT_FIELD: Record<Exclude<CanonicalType, "Patient" | "Medication">, "subject" | "patient"> = {
   Condition: "subject",
   MedicationRequest: "subject",
   MedicationStatement: "subject",
@@ -207,6 +215,7 @@ export const PATIENT_FIELD: Record<Exclude<CanonicalType, "Patient">, "subject" 
 /** The element holding each type's primary clinical code; a missing or text-only code goes to review. */
 export const PRIMARY_CODE: Partial<Record<CanonicalType, string>> = {
   Condition: "code",
+  Medication: "code",
   MedicationRequest: "medicationCodeableConcept",
   MedicationStatement: "medicationCodeableConcept",
   AllergyIntolerance: "code",

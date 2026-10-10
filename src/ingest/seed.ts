@@ -58,8 +58,9 @@ export async function seedSynthea(db: Db, dir: string, actor = "system:seed"): P
     tally(await ingestSource(db, input, actor));
   }
 
-  // Bulk Data NDJSON, Patient first so other types can be attributed.
-  const ndjson = (await listFiles(join(dir, "ndjson"), ".ndjson")).sort((a, b) => Number(b === "Patient.ndjson") - Number(a === "Patient.ndjson"));
+  // Bulk Data NDJSON: Patient first so other types can be attributed, Medication last (attributed via its requests).
+  const rank = (f: string) => (f === "Patient.ndjson" ? 0 : f === "Medication.ndjson" ? 2 : 1);
+  const ndjson = (await listFiles(join(dir, "ndjson"), ".ndjson")).sort((a, b) => rank(a) - rank(b));
   for (const filename of ndjson) {
     const bytes = await readFile(join(dir, "ndjson", filename));
     const lineCount = bytes.toString("utf8").split("\n").filter((l) => l.trim()).length;

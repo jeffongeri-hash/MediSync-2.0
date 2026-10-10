@@ -28,6 +28,21 @@ enum IssueStatus {
   IGNORED
 }
 
+/// Which pipeline step raised an issue; a step replaces only its own OPEN issues when it re-runs.
+enum IssueStage {
+  INGEST
+  MAPPING
+  DEDUPE
+}
+
+/// Terminology outcome for a canonical resource's primary code.
+enum MappingStatus {
+  MAPPED // known system, well-formed code, present in the local terminology table
+  UNMAPPED // has a code, but the system or code is unknown or malformed; in the review queue
+  NO_CODE // the type expects a primary code and has none (or only text)
+  NOT_APPLICABLE // the type has no primary code (Patient)
+}
+
 enum AuditAction {
   READ
   CREATE
@@ -96,12 +111,31 @@ model CanonicalResource {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  patient       Patient        @relation(fields: [patientId], references: [id])
-  sourceRecord  SourceRecord   @relation(fields: [sourceRecordId], references: [id])
+  // Phase 2. `resource` stays the canonical copy as received; `mapped` is that copy after terminology and unit
+  // normalization plus meta.source, recomputed from `resource` whenever the mapping version changes.
+  mapped         Json?
+  mappingVersion String?        @map("mapping_version")
+  mappingStatus  MappingStatus? @map("mapping_status")
+  /// Primary clinical code after mapping (medicationReference resolved), for dedupe, coverage and reconcile.
+  codeSystem     String?        @map("code_system")
+  code           String?
+  /// Provenance: the system that asserted the resource and the clinical date it asserts.
+  sourceSystem   String?        @map("source_system")
+  sourceDate     DateTime?      @map("source_date") @db.Timestamptz(3)
+  /// Cross-format duplicates of one clinical fact share a key; all but one point at the primary row.
+  dedupeKey      String?        @map("dedupe_key")
+  duplicateOfId  String?        @map("duplicate_of_id") @db.Uuid
+
+  patient       Patient             @relation(fields: [patientId], references: [id])
+  sourceRecord  SourceRecord        @relation(fields: [sourceRecordId], references: [id])
   mappingIssues MappingIssue[]
+  duplicateOf   CanonicalResource?  @relation("Duplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates    CanonicalResource[] @relation("Duplicates")
 
   @@unique([sourceRecordId, resourceType, fhirId])
   @@index([patientId, resourceType])
+  @@index([patientId, dedupeKey])
+  @@index([mappingStatus])
   @@map("canonical_resources")
 }
 
@@ -111,6 +145,7 @@ model MappingIssue {
   patientId           String?       @map("patient_id") @db.Uuid
   sourceRecordId      String        @map("source_record_id") @db.Uuid
   canonicalResourceId String?       @map("canonical_resource_id") @db.Uuid
+  stage               IssueStage    @default(INGEST)
   severity            IssueSeverity
   code                String
   message             String
@@ -126,6 +161,7 @@ model MappingIssue {
   canonicalResource CanonicalResource? @relation(fields: [canonicalResourceId], references: [id])
 
   @@index([status, code])
+  @@index([stage, canonicalResourceId])
   @@index([patientId])
   @@map("mapping_issues")
 }

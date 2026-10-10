@@ -19,7 +19,7 @@ export function toCanonical(raw: unknown, path: string): CanonicalResult {
   if (!isCanonicalType(rt)) {
     return {
       resource: null,
-      issues: [issue("INFO", "unsupported_resource", `${rt} is outside the Phase 1 canonical scope; kept raw only`, { path, resourceType: rt })],
+      issues: [issue("INFO", "unsupported_resource", `${rt} is outside the canonical scope; kept raw only`, { path, resourceType: rt })],
     };
   }
 
