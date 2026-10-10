@@ -12,6 +12,8 @@ export const ISSUE_CODES = [
   "unknown_patient", // resource whose patient is not in the patient index
   "defaulted_field", // a required FHIR field was filled with an explicit unknown/derived value
   "timezone_assumed_utc", // C-CDA timestamp had no offset
+  "invalid_value", // a source value that cannot be represented (bad timestamp, template placeholder, ...)
+  "duplicate_in_source", // same Type/id twice in one source; first kept
 ] as const;
 export type IssueCode = (typeof ISSUE_CODES)[number];
 
