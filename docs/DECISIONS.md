@@ -20,3 +20,12 @@
 - A source is parsed once (`parsed_at`, `parser_version`); a resource not attributable to a known patient is WARNING `unknown_patient` and not stored.
 - Same Type/id twice in one source: first kept; identical copies INFO, differing copies WARNING `duplicate_in_source`.
 - Audit entries use a strict schema, so a misspelled field fails loudly instead of being dropped.
+- Phase 2: `canonical_resources.resource` stays the copy as received; `mapped` is recomputed from it by a pure mapper whenever `MAPPING_VERSION` changes, so mapping never drifts.
+- Terminology is local only (NLM hosts blocked), behind a `TerminologySource` interface; code tables hold the fixtures' codes, and SNOMED CT/LOINC check digits are verified offline.
+- SNOMED CT to ICD-10-CM crosswalk is hand-written and unverified; derived codings carry `urn:medisync:extension:derived-coding`. `null` = no diagnosis code applies (INFO); missing = WARNING.
+- Dedupe is per patient across formats and links (`duplicate_of_id`), never merges. Ids match only within one source system; fallback is code + clinical day with one row per source. Primary: Bundle > NDJSON > C-CDA.
+- Provenance: `meta.source` = `urn:medisync:source:<system>#<source_record_id>` plus `source_system`/`source_date` columns; FHIR Provenance resources are generated at export (Phase 3).
+- Units: a small UCUM table plus aliases sets `system`/`code`; values are never rescaled in Phase 2.
+- Medication is a canonical type, attributed to the patient via the MedicationRequest/Statement that references it; NDJSON seeds `Medication.ndjson` last.
+- `mapping_issues.stage` (INGEST/MAPPING/DEDUPE): a re-run replaces only its own stage's OPEN issues; RESOLVED/IGNORED ones are kept and not raised again.
+- A `PARSER_VERSION` bump does not re-parse sources already ingested (sha256 idempotency); after a parser change, seed a fresh database.

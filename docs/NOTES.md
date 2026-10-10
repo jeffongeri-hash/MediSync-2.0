@@ -38,3 +38,18 @@ build container's network policy. Re-check when those hosts are reachable, and n
 - Prisma 7 `migrate dev` did not regenerate the client here; run `pnpm db:generate` after a schema change.
 - `next dev` writes AGENTS.md (Next.js agent notes) and re-creates it if deleted, so it is committed.
 - Playwright pinned to 1.56.1 to match the container's preinstalled Chromium (revision 1194).
+
+## Terminology (Phase 2, 2026-10-10)
+- Blocked by the network policy: rxnav.nlm.nih.gov, uts-ws.nlm.nih.gov, clinicaltables.nlm.nih.gov, ucum.nlm.nih.gov. Local tables only.
+  Re-verify the code tables and the SNOMED CT to ICD-10-CM crosswalk (NLM's official map) when reachable, no later than Phase 5.
+- Crosswalk targets reflect ICD-10-CM changes recalled from memory (M54.50 from FY2022, Z59.82 from FY2023, Z59.10 from FY2024): verify.
+- Code tables were curated from the fixtures' own codes, so fixture primary-code coverage is 100% by construction (see
+  docs/reports/phase2-mapping.md). All 126 SNOMED CT and 93 LOINC fixture codes pass their check digits.
+- Synthea: 9 MedicationRequests use medicationReference to a Medication (2 RxNorm codes); C-CDA carries the RxNorm
+  directly, as MedicationStatement under the same id. Every NDJSON and C-CDA row shares an id with a Bundle row, so
+  the code + day dedupe fallback is exercised only by unit tests.
+- C-CDA Encounter.class is still v3 NullFlavor UNK (Phase 1 gap, unchanged); the linked Bundle Encounter has the class.
+
+## Tooling (Phase 2)
+- Prisma refuses `migrate reset` without explicit user consent; seed a fresh database instead.
+- `.prettierrc.json` sets printWidth 100, but Phase 1 code was not formatted with it: run Prettier on new files only.
