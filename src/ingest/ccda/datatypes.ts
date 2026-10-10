@@ -1,36 +1,26 @@
 import { createHash } from "node:crypto";
 import { fhirId, issue, type IngestIssue } from "@/canonical";
 import { attr, kid, kids, text, type XNode } from "@/ingest/ccda/xml";
+import { OID_SYSTEMS } from "@/mapping/systems";
 
 /** Per-document mapping context: collects issues and keeps ids deterministic. */
 export type Ctx = { issues: IngestIssue[]; docKey: string; resourceType?: string; fhirId?: string };
 
-/** C-CDA code system OIDs -> FHIR R4 system URIs (see docs/NOTES.md). Unknown OIDs become urn:oid:... + WARNING. */
-export const CODE_SYSTEMS: Record<string, string> = {
-  "2.16.840.1.113883.6.96": "http://snomed.info/sct",
-  "2.16.840.1.113883.6.1": "http://loinc.org",
-  "2.16.840.1.113883.6.88": "http://www.nlm.nih.gov/research/umls/rxnorm",
-  "2.16.840.1.113883.12.292": "http://hl7.org/fhir/sid/cvx",
-  "2.16.840.1.113883.6.90": "http://hl7.org/fhir/sid/icd-10-cm",
-  "2.16.840.1.113883.6.103": "http://hl7.org/fhir/sid/icd-9-cm",
-  "2.16.840.1.113883.6.12": "http://www.ama-assn.org/go/cpt",
-  "2.16.840.1.113883.6.69": "http://hl7.org/fhir/sid/ndc",
-  "2.16.840.1.113883.4.9": "http://fdasis.nlm.nih.gov",
-  "2.16.840.1.113883.6.8": "http://unitsofmeasure.org",
-  "2.16.840.1.113883.5.4": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
-  "2.16.840.1.113883.5.1": "http://terminology.hl7.org/CodeSystem/v3-AdministrativeGender",
-  "2.16.840.1.113883.5.83": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
-  "2.16.840.1.113883.6.238": "urn:oid:2.16.840.1.113883.6.238",
-};
-
 function warn(ctx: Ctx, code: IngestIssue["code"], message: string, path: string) {
-  ctx.issues.push(issue("WARNING", code, message, { path, resourceType: ctx.resourceType, fhirId: ctx.fhirId }));
+  ctx.issues.push(
+    issue("WARNING", code, message, { path, resourceType: ctx.resourceType, fhirId: ctx.fhirId }),
+  );
 }
 
 export function systemUri(oid: string, ctx: Ctx, path: string): string {
-  const uri = CODE_SYSTEMS[oid];
+  const uri = OID_SYSTEMS[oid];
   if (uri) return uri;
-  warn(ctx, "unknown_code_system", "C-CDA codeSystem OID has no known FHIR URI; kept as urn:oid", path);
+  warn(
+    ctx,
+    "unknown_code_system",
+    "C-CDA codeSystem OID has no known FHIR URI; kept as urn:oid",
+    path,
+  );
   return `urn:oid:${oid}`;
 }
 
@@ -74,16 +64,28 @@ export function ts(value: string | undefined, ctx: Ctx, path: string): string | 
   if (!h) return `${y}-${mo}-${d}`;
   let zone = "Z";
   if (tz) zone = `${tz.slice(0, 3)}:${tz.slice(3)}`;
-  else ctx.issues.push(issue("INFO", "timezone_assumed_utc", "C-CDA timestamp without UTC offset; UTC assumed", { path }));
+  else
+    ctx.issues.push(
+      issue("INFO", "timezone_assumed_utc", "C-CDA timestamp without UTC offset; UTC assumed", {
+        path,
+      }),
+    );
   return `${y}-${mo}-${d}T${h}:${mi ?? "00"}:${s ?? "00"}${frac ?? ""}${zone}`;
 }
 
 /** effectiveTime: either a point (value=) or an interval (low/high). */
-export function timeOf(n: XNode | undefined, ctx: Ctx, path: string): { point?: string; start?: string; end?: string } {
+export function timeOf(
+  n: XNode | undefined,
+  ctx: Ctx,
+  path: string,
+): { point?: string; start?: string; end?: string } {
   if (!n) return {};
   const point = ts(attr(n, "value"), ctx, path);
   if (point) return { point };
-  return { start: ts(attr(kid(n, "low"), "value"), ctx, `${path}/low`), end: ts(attr(kid(n, "high"), "value"), ctx, `${path}/high`) };
+  return {
+    start: ts(attr(kid(n, "low"), "value"), ctx, `${path}/low`),
+    end: ts(attr(kid(n, "high"), "value"), ctx, `${path}/high`),
+  };
 }
 
 /** Observation value -> FHIR value[x]. Unrendered template placeholders ("{entry.value}") are dropped with a warning. */
@@ -98,7 +100,12 @@ export function valueOf(n: XNode | undefined, ctx: Ctx, path: string): Record<st
         return {};
       }
       const unit = attr(n, "unit");
-      return { valueQuantity: { value: v, ...(unit ? { unit, system: "http://unitsofmeasure.org", code: unit } : {}) } };
+      return {
+        valueQuantity: {
+          value: v,
+          ...(unit ? { unit, system: "http://unitsofmeasure.org", code: unit } : {}),
+        },
+      };
     }
     case "INT": {
       const v = Number(attr(n, "value"));
@@ -127,7 +134,12 @@ export function valueOf(n: XNode | undefined, ctx: Ctx, path: string): Record<st
     case "BL":
       return { valueBoolean: attr(n, "value") === "true" };
     default:
-      warn(ctx, "invalid_value", `C-CDA value type ${type ?? "(none)"} is not mapped; omitted`, path);
+      warn(
+        ctx,
+        "invalid_value",
+        `C-CDA value type ${type ?? "(none)"} is not mapped; omitted`,
+        path,
+      );
       return {};
   }
 }

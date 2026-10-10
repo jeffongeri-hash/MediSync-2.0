@@ -1,0 +1,22 @@
+{
+  "system": "http://hl7.org/fhir/sid/cvx",
+  "provenance": "Codes and displays found in the committed Synthea fixtures on 2026-10-10 (Synthea's own terminology). Not checked against an official release: NLM and SNOMED hosts are blocked by the network policy.",
+  "codes": {
+    "03": "MMR",
+    "08": "Hep B, adolescent or pediatric",
+    "10": "IPV",
+    "20": "DTaP",
+    "21": "varicella",
+    "43": "Hep B, adult",
+    "49": "Hib (PRP-OMP)",
+    "52": "Hep A, adult",
+    "62": "HPV, quadrivalent",
+    "113": "Td (adult), 5 Lf tetanus toxoid, preservative free, adsorbed",
+    "114": "meningococcal MCV4P",
+    "115": "Tdap",
+    "119": "rotavirus, monovalent",
+    "121": "zoster vaccine, live",
+    "133": "Pneumococcal conjugate PCV 13",
+    "140": "Influenza, split virus, trivalent, PF"
+  }
+}
