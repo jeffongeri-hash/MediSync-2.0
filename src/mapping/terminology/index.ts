@@ -4,6 +4,7 @@ import cvx from "@/mapping/terminology/cvx.json";
 import loinc from "@/mapping/terminology/loinc.json";
 import rxnorm from "@/mapping/terminology/rxnorm.json";
 import snomed from "@/mapping/terminology/snomed.json";
+import { SYSTEM } from "@/mapping/systems";
 import { formatProblem } from "@/mapping/terminology/format";
 import { SNOMED_TO_ICD10CM, type IcdTarget } from "@/mapping/terminology/snomed-icd10cm";
 
@@ -25,8 +26,15 @@ export interface TerminologySource {
 }
 
 type Table = { system: string; codes: Record<string, string> };
+// ICD-10-CM has no table of its own yet: the known codes are the crosswalk targets.
+const icd10cm: Table = {
+  system: SYSTEM.ICD10CM,
+  codes: Object.fromEntries(
+    Object.values(SNOMED_TO_ICD10CM).flatMap((t) => (t ? [[t.code, t.display]] : [])),
+  ),
+};
 const TABLES = new Map<string, Record<string, string>>(
-  ([snomed, loinc, rxnorm, cvx] as Table[]).map((t) => [t.system, t.codes]),
+  ([snomed, loinc, rxnorm, cvx, icd10cm] as Table[]).map((t) => [t.system, t.codes]),
 );
 
 export function tableTerminology(

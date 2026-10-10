@@ -14,6 +14,11 @@ export const ISSUE_CODES = [
   "timezone_assumed_utc", // C-CDA timestamp had no offset
   "invalid_value", // a source value that cannot be represented (bad timestamp, template placeholder, ...)
   "duplicate_in_source", // same Type/id twice in one source; first kept
+  // Phase 2 mapping and dedupe
+  "unmapped_code", // primary code in an unknown system, malformed, or not in the local terminology tables
+  "no_target_code", // crosswalk says the concept has no code in the target system (e.g. a social finding)
+  "unmapped_unit", // quantity unit is not UCUM and has no known UCUM equivalent
+  "duplicate_conflict", // linked cross-format duplicates disagree on the primary code
 ] as const;
 export type IssueCode = (typeof ISSUE_CODES)[number];
 
@@ -56,7 +61,11 @@ export function aggregateInfo(issues: IngestIssue[]): IngestIssue[] {
     if (g) {
       g.details.count = Number(g.details.count) + 1;
     } else {
-      const agg = { ...i, fhirId: undefined, details: { ...i.details, count: 1, firstPath: i.path ?? null } };
+      const agg = {
+        ...i,
+        fhirId: undefined,
+        details: { ...i.details, count: 1, firstPath: i.path ?? null },
+      };
       groups.set(key, agg);
       out.push(agg);
     }
