@@ -25,7 +25,8 @@
     "ndjson": "tsx scripts/make-ndjson.ts",
     "ingest:report": "tsx scripts/ingest-report.ts",
     "map": "tsx scripts/map.ts",
-    "mapping:report": "tsx scripts/mapping-report.ts"
+    "mapping:report": "tsx scripts/mapping-report.ts",
+    "transfer": "tsx scripts/transfer.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

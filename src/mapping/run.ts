@@ -11,8 +11,8 @@ import { localTerminology, type TerminologySource } from "@/mapping/terminology"
 
 export type MappingRunResult = { patients: number; mapped: number; duplicatesLinked: number; issues: number };
 type Tx = Parameters<Parameters<Db["$transaction"]>[0]>[0];
-type Stage = "MAPPING" | "DEDUPE";
-type PendingIssue = IngestIssue & { canonicalResourceId: string; sourceRecordId: string };
+type Stage = "MAPPING" | "DEDUPE" | "EXPORT";
+export type PendingIssue = IngestIssue & { canonicalResourceId: string; sourceRecordId: string };
 
 export async function runMapping(
   db: Db,
@@ -122,7 +122,7 @@ async function mapPatient(tx: Tx, patientId: string, opts: { actor: string; all:
 }
 
 /** Replaces a stage's OPEN issues on the given rows; an issue already RESOLVED or IGNORED is not raised again. */
-async function replaceIssues(tx: Tx, patientId: string, stage: Stage, rowIds: string[], issues: PendingIssue[]) {
+export async function replaceIssues(tx: Tx, patientId: string, stage: Stage, rowIds: string[], issues: PendingIssue[]) {
   if (!rowIds.length) return;
   await tx.mappingIssue.deleteMany({ where: { stage, status: "OPEN", canonicalResourceId: { in: rowIds } } });
   const closed = await tx.mappingIssue.findMany({

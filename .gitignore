@@ -4,6 +4,8 @@ out/
 next-env.d.ts
 *.tsbuildinfo
 coverage/
+# Transfer bundles (pnpm transfer); fidelity reports for the record go in docs/reports.
+/exports/
 playwright-report/
 test-results/
 src/generated/
