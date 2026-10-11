@@ -14,6 +14,8 @@
   --next: #8a6a12;
   --next-soft: #f5edd5;
   --code-bg: #eef1f5;
+  --alert: #9b2226;
+  --alert-soft: #f8e4e2;
 
   --font-body: "Public Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -42,6 +44,8 @@
     --next: #e1c46b;
     --next-soft: #322a14;
     --code-bg: #111821;
+    --alert: #f1a39b;
+    --alert-soft: #3a1b1a;
     color-scheme: dark;
   }
 }
@@ -61,6 +65,8 @@
   --next: #e1c46b;
   --next-soft: #322a14;
   --code-bg: #111821;
+  --alert: #f1a39b;
+  --alert-soft: #3a1b1a;
   color-scheme: dark;
 }
 
@@ -393,4 +399,122 @@ a {
   * {
     scroll-behavior: auto !important;
   }
+}
+
+/* Phase 4 reconcile: side-by-side current (as of cutoff) vs incoming, with flags and decisions per line. */
+.recon td {
+  white-space: normal;
+  vertical-align: top;
+  min-width: 11rem;
+}
+.recon td.side-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+.recon .row-name {
+  font-weight: 600;
+}
+.recon .row-meta {
+  display: block;
+  color: var(--muted);
+  font-size: var(--step--1);
+}
+.flag {
+  display: block;
+  margin: 0 0 0.35rem;
+  padding: 0.3rem 0.5rem;
+  border-left: 3px solid currentColor;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: var(--step--1);
+}
+.flag-high {
+  color: var(--alert);
+  background: var(--alert-soft);
+}
+.flag-warning {
+  color: var(--next);
+  background: var(--next-soft);
+}
+.flag-info {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.flag strong {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+}
+.decide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+.decide button,
+.button-quiet {
+  font: inherit;
+  font-size: var(--step--1);
+  padding: 0.3rem 0.6rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--rule);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-decoration: none;
+}
+.decide button[value="ACCEPT"] {
+  border-color: var(--done);
+  color: var(--done);
+}
+.decide button[value="REJECT"] {
+  border-color: var(--alert);
+  color: var(--alert);
+}
+button.button {
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+.decision {
+  display: block;
+  font-size: var(--step--1);
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+.claims {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+.claim {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+}
+.cite {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent);
+  margin-right: 0.3rem;
+}
+.notice {
+  border: 1px solid var(--alert);
+  background: var(--alert-soft);
+  color: var(--alert);
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+}
+.edit-json {
+  width: 100%;
+  min-height: 24rem;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  background: var(--code-bg);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  padding: 0.7rem;
 }
