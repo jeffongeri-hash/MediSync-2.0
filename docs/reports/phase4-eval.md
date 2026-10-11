@@ -6,15 +6,22 @@ Gate: eval pass rate over 20 synthetic cases, where every AI claim has a valid s
 
 - **Claude pass rate: not available yet. 0 of 20 cases evaluated.** No `ANTHROPIC_API_KEY` is configured in this environment,
   so no response has been recorded (`fixtures/eval/recordings/` is empty) and replay reports every case as not evaluated.
-  To produce the number: set the key, run `pnpm eval --live --out docs/reports/phase4-eval-claude.md`, and commit the
-  recordings. CI then replays them on every push. Estimated cost per live run: about 76k input tokens plus output across 20 calls
-  to claude-sonnet-5-5.
+  See "When the key is set" below. Estimated cost per full live run: about 76k input tokens plus output across 20 calls to
+  claude-sonnet-5-5.
 - **Harness check (no AI): 20/20.** The rule-built template answers every case with claims in the records' own words, so it
   passes by construction. It shows the cases, citation check and condition check run end to end. It is not a model result.
 - **Scorer check:** unit tests feed an adversarial responder (unknown ids, missing citations, an invented "Type 2 diabetes") and
   every such case fails (`src/ai/eval.test.ts`).
 - **Rules:** every rule-detectable injected change was caught: dose change 5/5, status flip 5/5, allergy vs active medication 3/3.
   The 6 reworded duplicates under a local code are left to AI flags by design (rules 0/6). No decoy was named.
+
+## When the key is set
+
+1. `pnpm eval --prompts /tmp/prompts` (optional): writes the exact prompts for review; nothing is sent.
+2. `pnpm eval --live --cases case-01`: one call, a cheap check that the API accepts the request (structured output, streaming,
+   refusal fallback). A rejected request shows as `bad_request: <API message>` in the report.
+3. `pnpm eval --live --out docs/reports/phase4-eval-claude.md`: all 20 cases; recordings land in `fixtures/eval/recordings/`.
+4. Commit the recordings and the report. CI replays them on every push (report-only); `pnpm eval --strict` gates locally.
 
 ## Eval set
 

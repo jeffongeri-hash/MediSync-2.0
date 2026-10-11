@@ -48,3 +48,5 @@
 - Model call: claude-sonnet-5-5 (ANTHROPIC_MODEL overrides), structured output (`output_config.format`, not forced tool_choice, which Sonnet 5.5 rejects), effort high, server-side refusal fallback `fallbacks: "default"`.
 - Without ANTHROPIC_API_KEY the app uses a rule-built template summary, labelled as such. Sending records to the model writes an EXPORT audit entry (source anthropic).
 - Evals are a frozen set in fixtures/eval (10 patients, 20 cases, 25 injected changes). CI replays recordings keyed by prompt version + input sha256; missing or stale ones are "not evaluated", never passed.
+- The live call is streamed (`finalMessage`) with max_tokens 32000, since adaptive thinking counts toward the cap. A 400 keeps the API's message (truncated) in aiError; other failures keep only an error class.
+- CI's eval step is report-only: replay never fails the build. `pnpm eval --strict` exits 1 when an evaluated case fails, for local gating.

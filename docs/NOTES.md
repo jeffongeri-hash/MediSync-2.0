@@ -74,8 +74,11 @@ build container's network policy. Re-check when those hosts are reachable, and n
 - Anthropic SDK 0.133 (from the bundled claude-api reference, not fetched): Sonnet 5.5 rejects forced `tool_choice` (any/tool) with a 400,
   so structured output goes through `output_config.format` (`betaZodOutputFormat`, passed to `beta.messages.create` and parsed by our
   own validator). `fallbacks: "default"` needs beta `server-side-fallback-2026-07-01`; the serving model is recorded (`servedModel`).
-- Not verified live: that `fallbacks: "default"` and `output_config.format` are accepted together. First `pnpm eval --live` run will tell.
+- Not verified live: that `fallbacks: "default"`, `output_config.format` and streaming are accepted together. Run
+  `pnpm eval --live --cases case-01` first; a 400 is recorded with the API's message.
 - Prompt size over the 20 cases: about 265k characters (roughly 76k input tokens) in total, about 7.6k tokens for the largest case.
 - Seeded data findings: C-CDA MedicationStatements are always `completed`, so every active Bundle MedicationRequest shows a status
   conflict; C-CDA copies add allergy onset and reaction severity, and medication dose and end dates (reported as `adds_detail`).
   The seeded data has no therapeutic duplication or allergy-medication conflict among active rows; the eval injects them.
+- Phase 3 gaps, now surfaced by reconcile: C-CDA allergy onset and reaction severity show as `adds_detail` on the paired line,
+  and C-CDA MedicationStatements are compared with their Bundle MedicationRequest on status, start, end and dose. Still not merged.
