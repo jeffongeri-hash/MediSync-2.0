@@ -75,6 +75,7 @@ model Patient {
   canonicalResources CanonicalResource[]
   mappingIssues      MappingIssue[]
   transferJobs       TransferJob[]
+  reconciliationRuns ReconciliationRun[]
 
   @@unique([sourceSystem, sourcePatientId])
   @@map("patients")
@@ -136,11 +137,13 @@ model CanonicalResource {
   dedupeKey      String?        @map("dedupe_key")
   duplicateOfId  String?        @map("duplicate_of_id") @db.Uuid
 
-  patient       Patient             @relation(fields: [patientId], references: [id])
-  sourceRecord  SourceRecord        @relation(fields: [sourceRecordId], references: [id])
+  patient       Patient              @relation(fields: [patientId], references: [id])
+  sourceRecord  SourceRecord         @relation(fields: [sourceRecordId], references: [id])
   mappingIssues MappingIssue[]
-  duplicateOf   CanonicalResource?  @relation("Duplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
-  duplicates    CanonicalResource[] @relation("Duplicates")
+  duplicateOf   CanonicalResource?   @relation("Duplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates    CanonicalResource[]  @relation("Duplicates")
+  currentItems  ReconciliationItem[] @relation("ItemCurrent")
+  incomingItems ReconciliationItem[] @relation("ItemIncoming")
 
   @@unique([sourceRecordId, resourceType, fhirId])
   @@index([patientId, resourceType])
@@ -228,4 +231,136 @@ model TransferJob {
 
   @@index([patientId, createdAt])
   @@map("transfer_jobs")
+}
+
+enum ReconcileCategory {
+  PROBLEM
+  PMH
+  MEDICATION
+  ALLERGY
+}
+
+enum ReconcileMatch {
+  /// Same fact on both sides and nothing that differs.
+  SAME
+  /// Same fact on both sides, with differences or extra detail (see flags).
+  CHANGED
+  /// Only in the incoming record.
+  NEW
+  /// Only in the current chart.
+  CURRENT_ONLY
+}
+
+enum ClaimKind {
+  SUMMARY
+  FLAG
+}
+
+enum DecisionAction {
+  ACCEPT
+  REJECT
+  EDIT
+}
+
+/// Phase 4: one reconciliation of a patient's incoming (outside) records against the current chart.
+/// The current chart is the Bundle primaries as of `cutoff`; incoming is the C-CDA copy. Never writes canonical rows.
+model ReconciliationRun {
+  id            String   @id @default(uuid()) @db.Uuid
+  patientId     String   @map("patient_id") @db.Uuid
+  requestedBy   String   @map("requested_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  cutoff        DateTime @db.Timestamptz(3)
+  rulesVersion  String   @map("rules_version")
+  /// Who wrote the summary: "anthropic", "replay" (recorded response) or "template" (no AI, rule-built).
+  responder     String
+  /// "ok" | "failed"
+  aiStatus      String   @map("ai_status")
+  /// Model requested and model that served it (a refusal fallback can differ). Null for the template.
+  model         String?
+  servedModel   String?  @map("served_model")
+  promptVersion String?  @map("prompt_version")
+  /// sha256 of the exact prompt input; a recording is replayed only for the same hash.
+  inputSha256   String?  @map("input_sha256")
+  /// Model output text exactly as returned, before validation.
+  aiRaw         String?  @map("ai_raw")
+  /// Failure reason (stop reason, error class, schema failure); no PHI.
+  aiError       String?  @map("ai_error")
+  /// Counts only: items by category and match, flags by code, claims valid and dropped.
+  summary       Json?
+
+  patient   Patient                  @relation(fields: [patientId], references: [id])
+  items     ReconciliationItem[]
+  claims    ReconciliationClaim[]
+  decisions ReconciliationDecision[]
+
+  @@index([patientId, createdAt])
+  @@map("reconciliation_runs")
+}
+
+/// One line of the side-by-side view: a current row, an incoming row, or a matched pair, with deterministic flags.
+model ReconciliationItem {
+  id         String            @id @default(uuid()) @db.Uuid
+  runId      String            @map("run_id") @db.Uuid
+  ordinal    Int
+  category   ReconcileCategory
+  match      ReconcileMatch
+  currentId  String?           @map("current_id") @db.Uuid
+  incomingId String?           @map("incoming_id") @db.Uuid
+  /// The rows as shown: the current one as of the cutoff, the incoming one as received (after mapping).
+  current    Json?
+  incoming   Json?
+  /// Rule flags: [{code, severity, message, sourceIds}]. Every flag cites canonical ids.
+  flags      Json
+
+  run         ReconciliationRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  currentRow  CanonicalResource?       @relation("ItemCurrent", fields: [currentId], references: [id])
+  incomingRow CanonicalResource?       @relation("ItemIncoming", fields: [incomingId], references: [id])
+  decisions   ReconciliationDecision[]
+
+  @@unique([runId, ordinal])
+  @@map("reconciliation_items")
+}
+
+/// One AI (or template) statement: a summary sentence or a flag. Kept even when invalid, with the reasons.
+model ReconciliationClaim {
+  id           String    @id @default(uuid()) @db.Uuid
+  runId        String    @map("run_id") @db.Uuid
+  ordinal      Int
+  kind         ClaimKind
+  /// Summary topic (active_problem, past_history, medication, allergy) or flag type.
+  topic        String
+  text         String
+  /// Aliases exactly as cited, and the canonical ids they resolve to.
+  citedAliases String[]  @map("cited_aliases")
+  sourceIds    String[]  @map("source_ids")
+  valid        Boolean
+  /// Why it was dropped: no_source, unknown_id, hallucinated_condition, miscited_condition.
+  problems     String[]
+
+  run       ReconciliationRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
+  decisions ReconciliationDecision[]
+
+  @@unique([runId, ordinal])
+  @@map("reconciliation_claims")
+}
+
+/// Provider decision on an item or a claim. Append-only (trigger); the latest decision per target wins.
+/// EDIT stores a provider-authored copy of the resource; canonical rows are never written.
+model ReconciliationDecision {
+  id             BigInt         @id @default(autoincrement())
+  runId          String         @map("run_id") @db.Uuid
+  itemId         String?        @map("item_id") @db.Uuid
+  claimId        String?        @map("claim_id") @db.Uuid
+  action         DecisionAction
+  actor          String
+  decidedAt      DateTime       @default(now()) @map("decided_at")
+  note           String?
+  editedResource Json?          @map("edited_resource")
+
+  run   ReconciliationRun    @relation(fields: [runId], references: [id])
+  item  ReconciliationItem?  @relation(fields: [itemId], references: [id])
+  claim ReconciliationClaim? @relation(fields: [claimId], references: [id])
+
+  @@index([runId, decidedAt])
+  @@map("reconciliation_decisions")
 }
