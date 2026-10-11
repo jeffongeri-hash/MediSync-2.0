@@ -53,3 +53,17 @@ build container's network policy. Re-check when those hosts are reachable, and n
 ## Tooling (Phase 2)
 - Prisma refuses `migrate reset` without explicit user consent; seed a fresh database instead.
 - `.prettierrc.json` sets printWidth 100, but Phase 1 code was not formatted with it: run Prettier on new files only.
+
+## US Core export (Phase 3, 2026-10-11)
+- hl7.org still blocked. From memory and unverified: the US Core 6.1.0 profile URLs, the profile chosen per resource (vital-sign LOINC to profile,
+  survey to screening-assessment, exam to simple-observation), mandatory vs must-support elements, and the Provenance participant-type code systems.
+  Verify against the IG, and run the official FHIR validator on an exported bundle, when reachable and no later than Phase 5.
+- Checked as must-support only because recall of their cardinality is uncertain: MedicationRequest.authoredOn and requester, Observation.effective[x]
+  outside vital signs, Procedure.performed[x], DocumentReference.date and author.
+- Seeded data: all 10 patients export with nothing excluded, at 92.5% to 97.5% completeness. Every lost element is a Practitioner, Location or
+  Organization reference: those resources exist only raw, in the hospitalInformation and practitionerInformation bundles. Adding them to the
+  canonical model would close most of the gap.
+- C-CDA duplicates carry AllergyIntolerance onset and reaction.severity that the Bundle primary lacks (reported, not merged). C-CDA
+  MedicationStatement duplicates of a MedicationRequest are not compared element by element.
+- Synthea Bundle codings already have canonical system URIs, displays and UCUM codes, so the seeded export shows no normalization changes; the
+  export fixture (fixtures/export) covers those paths.

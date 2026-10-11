@@ -29,3 +29,12 @@
 - Medication is a canonical type, attributed to the patient via the MedicationRequest/Statement that references it; NDJSON seeds `Medication.ndjson` last.
 - `mapping_issues.stage` (INGEST/MAPPING/DEDUPE): a re-run replaces only its own stage's OPEN issues; RESOLVED/IGNORED ones are kept and not raised again.
 - A `PARSER_VERSION` bump does not re-parse sources already ingested (sha256 idempotency); after a parser change, seed a fresh database.
+- Phase 3 export source: primary rows only (`duplicate_of_id` null), from `mapped`; linked duplicates are cited in Provenance and never merged in; elements only a duplicate has are listed in the fidelity report.
+- Export target: US Core 6.1.0 as an R4 `transaction` Bundle of POST entries without ids; fullUrls are `urn:uuid` derived from sha256 of `Type/id` (UUID v8 layout), so the same rows and export time give the same bytes.
+- US Core conformance is checked locally (rules from memory): a missing mandatory element is ERROR `profile_violation` and the resource is not exported; absent must-support elements are one WARNING per resource; uncertain cardinality is treated as must-support. A Patient that fails blocks the bundle.
+- A reference to a type outside the canonical model (Practitioner, Location, Organization) or to a resource not exported keeps only its display; an empty one gets "<Type> record not included in this transfer". It counts as lost.
+- Codings derived from the unverified SNOMED CT to ICD-10-CM crosswalk are withheld from every export.
+- Each exported resource gets one Provenance resource: author is the source system, transmitter is MediSync, and entities are the source documents by sha256, duplicates included. `meta` is replaced by the versioned profile.
+- Completeness = (kept + changed) / leaf elements of the source `resource` as received, per type and overall. Changed means the same path with a new value; lost means no counterpart. id, meta and resourceType are not scored; additions are reported but not scored.
+- `transfer_jobs` run synchronously from `pnpm transfer` and `POST /api/transfer` (dry run by default there). Each job writes one EXPORT audit entry, and its EXPORT-stage issues on dry runs too. Only a real export stores the bundle text.
+- The transfer API returns job status and report, never the bundle, and has no authentication until Phase 6 (synthetic data only).

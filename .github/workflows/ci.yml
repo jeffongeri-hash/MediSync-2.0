@@ -41,6 +41,10 @@ jobs:
         run: pnpm -s ingest:report >> "$GITHUB_STEP_SUMMARY"
       - name: Mapping coverage report
         run: pnpm -s mapping:report >> "$GITHUB_STEP_SUMMARY"
+      - name: Transfer fidelity report (one synthetic patient, dry run)
+        run: |
+          pnpm -s transfer c4a5ef89-933c-c428-8fa7-4a26d9f621a9 --dry-run --at 2026-10-11T00:00:00Z --out exports
+          cat exports/c4a5ef89-933c-c428-8fa7-4a26d9f621a9.fidelity.md >> "$GITHUB_STEP_SUMMARY"
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
