@@ -6,7 +6,8 @@ import { sha256, type AiInput } from "@/ai/input";
 export const PROMPT_VERSION = "reconcile-summary@1";
 export const DEFAULT_MODEL = "claude-sonnet-5-5";
 export const EFFORT = "high" as const;
-export const MAX_TOKENS = 16000;
+/** Output cap including adaptive thinking; the call is streamed, so a high cap cannot time out. */
+export const MAX_TOKENS = 32000;
 
 export const SUMMARY_TOPICS = ["active_problem", "past_history", "medication", "allergy"] as const;
 export const AI_FLAG_TYPES = ["possible_duplicate", "conflict"] as const;

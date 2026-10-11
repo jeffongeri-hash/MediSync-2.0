@@ -191,10 +191,14 @@ describe("responders", () => {
     const client = {
       beta: {
         messages: {
-          create: async (params: Record<string, unknown>) => {
+          stream: (params: Record<string, unknown>) => {
             calls.push(params);
-            if (next instanceof Error) throw next;
-            return next;
+            return {
+              finalMessage: async () => {
+                if (next instanceof Error) throw next;
+                return next;
+              },
+            };
           },
         },
       },

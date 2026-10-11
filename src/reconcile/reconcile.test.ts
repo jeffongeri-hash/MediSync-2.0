@@ -3,6 +3,7 @@ import { SYSTEM } from "@/mapping/systems";
 import { buildReconciliation, distinctFlags, type Reconciliation } from "@/reconcile/build";
 import { allergenProfile, drugProfile } from "@/reconcile/drugs";
 import { currentAsOf, defaultCutoff, toReconRow, type SourceRow } from "@/reconcile/rows";
+import { defaultResponder } from "@/reconcile/run";
 
 const CUTOFF = new Date("2025-01-01T00:00:00Z");
 let n = 0;
@@ -254,5 +255,19 @@ describe("local drug table", () => {
       classes: ["penicillin"],
     });
     expect(allergenProfile(SYSTEM.SNOMED, "3718001", "Cow's milk (substance)")).toBeNull();
+  });
+});
+
+describe("defaultResponder", () => {
+  it("uses Claude only when a key is configured, with the model override, else the labelled template", () => {
+    expect(defaultResponder({})).toMatchObject({ name: "template", model: null });
+    expect(defaultResponder({ ANTHROPIC_API_KEY: "" })).toMatchObject({ name: "template" });
+    expect(defaultResponder({ ANTHROPIC_API_KEY: "test-key" })).toMatchObject({
+      name: "anthropic",
+      model: "claude-sonnet-5-5",
+    });
+    expect(
+      defaultResponder({ ANTHROPIC_API_KEY: "test-key", ANTHROPIC_MODEL: "claude-opus-5-5" }),
+    ).toMatchObject({ name: "anthropic", model: "claude-opus-5-5" });
   });
 });

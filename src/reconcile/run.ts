@@ -13,8 +13,10 @@ import { defaultCutoff, type ReconRow } from "@/reconcile/rows";
 export const RECONCILE_SOURCE = "reconcile";
 
 /** Live Claude when a key is configured, else the rule-built template (labelled as such in the UI). */
-export function defaultResponder(env = process.env): Responder {
-  return env.ANTHROPIC_API_KEY ? anthropicResponder() : templateResponder();
+export function defaultResponder(env: Record<string, string | undefined> = process.env): Responder {
+  return env.ANTHROPIC_API_KEY
+    ? anthropicResponder({ apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL })
+    : templateResponder();
 }
 
 const count = <T>(xs: T[], key: (x: T) => string) =>

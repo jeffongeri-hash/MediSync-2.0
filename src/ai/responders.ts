@@ -47,27 +47,32 @@ function errorCode(e: unknown): string {
 }
 
 /**
- * Live Claude call: structured output against the summary schema, adaptive thinking at a fixed effort, and the
- * server-side refusal fallback ("default" routing), so `servedModel` can differ from `model`.
+ * Live Claude call, streamed: structured output against the summary schema, adaptive thinking at a fixed effort, and
+ * the server-side refusal fallback ("default" routing), so `servedModel` can differ from `model`.
  */
-export function anthropicResponder(opts: { model?: string; client?: Anthropic } = {}): Responder {
+export function anthropicResponder(
+  opts: { model?: string; apiKey?: string; client?: Anthropic } = {},
+): Responder {
   const model = opts.model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
-  const client = opts.client ?? new Anthropic();
+  const client = opts.client ?? new Anthropic(opts.apiKey ? { apiKey: opts.apiKey } : {});
   return {
     name: "anthropic",
     model,
     async respond(req) {
       const base = { responder: "anthropic" as const, model, servedModel: null, usage: null };
       try {
-        const res = await client.beta.messages.create({
-          model,
-          max_tokens: MAX_TOKENS,
-          betas: ["server-side-fallback-2026-07-01"],
-          fallbacks: "default",
-          system: req.system,
-          messages: [{ role: "user", content: req.user }],
-          output_config: { effort: EFFORT, format: OUTPUT_FORMAT },
-        });
+        // Streamed so a long thinking + output turn never hits an HTTP timeout; only the final message is used.
+        const res = await client.beta.messages
+          .stream({
+            model,
+            max_tokens: MAX_TOKENS,
+            betas: ["server-side-fallback-2026-07-01"],
+            fallbacks: "default",
+            system: req.system,
+            messages: [{ role: "user", content: req.user }],
+            output_config: { effort: EFFORT, format: OUTPUT_FORMAT },
+          })
+          .finalMessage();
         const text = res.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
         const stop = res.stop_reason;
         const error =
