@@ -38,3 +38,13 @@
 - Completeness = (kept + changed) / leaf elements of the source `resource` as received, per type and overall. Changed means the same path with a new value; lost means no counterpart. id, meta and resourceType are not scored; additions are reported but not scored.
 - `transfer_jobs` run synchronously from `pnpm transfer` and `POST /api/transfer` (dry run by default there). Each job writes one EXPORT audit entry, and its EXPORT-stage issues on dry runs too. Only a real export stores the bundle text.
 - The transfer API returns job status and report, never the bundle, and has no authentication until Phase 6 (synthetic data only).
+- Phase 4 current chart = Bundle primaries as of a cutoff (latest encounter minus 12 months); conditions that abated after it show active. Incoming = the C-CDA rows. NDJSON copies are not reconciled.
+- Phase 4 scope: Condition (problems if active on either side, else past history), MedicationRequest/Statement, AllergyIntolerance. Procedures are not reconciled yet.
+- Pairing: dedupe link first, then same family + code + clinical day; the rest is NEW or CURRENT_ONLY. Rule flags are authoritative and always cite canonical ids; AI flags are separate suggestions.
+- Drug classes, allergen terms and the ingredient table are local and unverified (src/reconcile/drugs.ts), keyed by the fixtures' RxNorm codes; class labels name the route for steroids.
+- Reconcile writes only reconciliation_runs/items/claims/decisions and audit_log. Decisions are append-only (trigger); the latest per target wins; EDIT stores a provider-authored copy validated by the canonical Zod schema.
+- Model input uses short aliases (C1.., I1..), never canonical ids; a citation is valid only if the alias was sent. Invalid claims are stored with reasons and never shown as suggestions.
+- "No hallucinated conditions" is checked lexically: SNOMED disorder/finding/situation displays plus a synonym lexicon; a named condition must be on a cited row (else miscited) or on some row (else hallucinated).
+- Model call: claude-sonnet-5-5 (ANTHROPIC_MODEL overrides), structured output (`output_config.format`, not forced tool_choice, which Sonnet 5.5 rejects), effort high, server-side refusal fallback `fallbacks: "default"`.
+- Without ANTHROPIC_API_KEY the app uses a rule-built template summary, labelled as such. Sending records to the model writes an EXPORT audit entry (source anthropic).
+- Evals are a frozen set in fixtures/eval (10 patients, 20 cases, 25 injected changes). CI replays recordings keyed by prompt version + input sha256; missing or stale ones are "not evaluated", never passed.

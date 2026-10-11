@@ -27,13 +27,14 @@ Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient
 
 ## Commands
 - Setup: `cp .env.example .env`, `pnpm install`, `pnpm db:deploy`, `pnpm db:seed`
-- `pnpm dev` (app at :3000, demo at /demo) · `pnpm build`
+- `pnpm dev` (app at :3000, demo at /demo, reconcile at /reconcile) · `pnpm build`
 - `pnpm test` (Vitest; DB tests need DATABASE_URL) · `pnpm test:e2e` (Playwright) · `pnpm lint` · `pnpm typecheck`
 - `pnpm db:migrate` (new migration) · `pnpm db:deploy` (apply) · `pnpm db:seed` (idempotent Synthea load)
 - `pnpm synthea` (regenerate fixtures; needs Java) · `pnpm ndjson` (rebuild NDJSON fixtures from the bundles)
 - `pnpm ingest:report [out.md]` (per-patient issue report) · `pnpm demo:snapshot [baseUrl] [out]` (static /demo copy)
 - `pnpm map [--all]` (mapping + dedupe pass; db:seed runs it) · `pnpm mapping:report [out.md]` (coverage report)
 - `pnpm transfer <patient> [--dry-run] [--out dir] [--report file] [--at instant]` (US Core bundle + fidelity report; `exports/` is gitignored) · API: `POST /api/transfer`, `GET /api/transfer/:id`
+- `pnpm eval` (replay recorded Claude answers) · `pnpm eval --live` (needs ANTHROPIC_API_KEY; re-records) · `pnpm eval --template` (no AI) · `--out file` · `pnpm eval:build` (rebuild fixtures/eval from the DB)
 
 ## Conventions
 - Canonical internal model = FHIR R4 resources validated with Zod. All sources map INTO it; all exports map OUT of it.

@@ -67,3 +67,15 @@ build container's network policy. Re-check when those hosts are reachable, and n
   MedicationStatement duplicates of a MedicationRequest are not compared element by element.
 - Synthea Bundle codings already have canonical system URIs, displays and UCUM codes, so the seeded export shows no normalization changes; the
   export fixture (fixtures/export) covers those paths.
+
+## Reconciliation + AI (Phase 4, 2026-10-11)
+- api.anthropic.com is reachable from the build container (unauthenticated `GET /v1/models` returns 401), but no ANTHROPIC_API_KEY
+  is configured, so no live call has been made. The live path (`anthropicResponder`) is covered only by a mocked-client test.
+- Anthropic SDK 0.133 (from the bundled claude-api reference, not fetched): Sonnet 5.5 rejects forced `tool_choice` (any/tool) with a 400,
+  so structured output goes through `output_config.format` (`betaZodOutputFormat`, passed to `beta.messages.create` and parsed by our
+  own validator). `fallbacks: "default"` needs beta `server-side-fallback-2026-07-01`; the serving model is recorded (`servedModel`).
+- Not verified live: that `fallbacks: "default"` and `output_config.format` are accepted together. First `pnpm eval --live` run will tell.
+- Prompt size over the 20 cases: about 265k characters (roughly 76k input tokens) in total, about 7.6k tokens for the largest case.
+- Seeded data findings: C-CDA MedicationStatements are always `completed`, so every active Bundle MedicationRequest shows a status
+  conflict; C-CDA copies add allergy onset and reaction severity, and medication dose and end dates (reported as `adds_detail`).
+  The seeded data has no therapeutic duplication or allergy-medication conflict among active rows; the eval injects them.
