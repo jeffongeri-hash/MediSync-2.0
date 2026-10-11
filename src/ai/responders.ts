@@ -39,7 +39,10 @@ function errorCode(e: unknown): string {
   if (e instanceof Anthropic.AuthenticationError) return "authentication";
   if (e instanceof Anthropic.PermissionDeniedError) return "permission_denied";
   if (e instanceof Anthropic.RateLimitError) return "rate_limited";
-  if (e instanceof Anthropic.BadRequestError) return "bad_request";
+  // A 400 names the offending parameter (e.g. an unsupported field combination); keep it so the first live run
+  // is diagnosable. It describes the request shape, not the records.
+  if (e instanceof Anthropic.BadRequestError)
+    return `bad_request: ${e.message.replace(/\s+/g, " ").slice(0, 200)}`;
   if (e instanceof Anthropic.APIConnectionError) return "connection";
   if (e instanceof Anthropic.APIError) return `api_error:${e.status ?? "unknown"}`;
   if (e instanceof Anthropic.AnthropicError) return "client_error";

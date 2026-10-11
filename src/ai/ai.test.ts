@@ -216,6 +216,16 @@ describe("responders", () => {
 
     next = message("refusal", "");
     expect((await summarize(recon, responder)).checked.error).toBe("refusal:bio");
+    next = new Anthropic.BadRequestError(
+      400,
+      {
+        type: "error",
+        error: { type: "invalid_request_error", message: "fallbacks: not supported" },
+      },
+      "fallbacks: not supported",
+      new Headers(),
+    );
+    expect((await summarize(recon, responder)).checked.error).toMatch(/^bad_request: .*fallbacks/);
     next = new Anthropic.APIConnectionError({ message: "down" });
     expect((await summarize(recon, responder)).checked.error).toBe("connection");
   });
