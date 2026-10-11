@@ -19,6 +19,10 @@ export const ISSUE_CODES = [
   "no_target_code", // crosswalk says the concept has no code in the target system (e.g. a social finding)
   "unmapped_unit", // quantity unit is not UCUM and has no known UCUM equivalent
   "duplicate_conflict", // linked cross-format duplicates disagree on the primary code
+  // Phase 3 export (US Core target profile)
+  "profile_violation", // a mandatory element of the target profile is missing; the resource is not exported
+  "profile_must_support", // must-support elements of the target profile are absent; exported anyway
+  "no_target_profile", // the resource type has no profile in the target IG; exported as base FHIR R4
 ] as const;
 export type IssueCode = (typeof ISSUE_CODES)[number];
 

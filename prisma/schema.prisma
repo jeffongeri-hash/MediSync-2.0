@@ -33,6 +33,15 @@ enum IssueStage {
   INGEST
   MAPPING
   DEDUPE
+  EXPORT
+}
+
+/// Lifecycle of a transfer job. Jobs run synchronously today; the states also fit a queue later.
+enum TransferStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
 }
 
 /// Terminology outcome for a canonical resource's primary code.
@@ -65,6 +74,7 @@ model Patient {
   sourceRecords      SourceRecord[]
   canonicalResources CanonicalResource[]
   mappingIssues      MappingIssue[]
+  transferJobs       TransferJob[]
 
   @@unique([sourceSystem, sourcePatientId])
   @@map("patients")
@@ -181,4 +191,41 @@ model AuditLog {
   @@index([patientId, occurredAt])
   @@index([occurredAt])
   @@map("audit_log")
+}
+
+/// One transfer of a patient's canonical record to a target profile (Phase 3: US Core FHIR transaction Bundle).
+/// A dry run computes everything (diff, score, report, bundle hash) but does not keep the bundle.
+model TransferJob {
+  id                String         @id @default(uuid()) @db.Uuid
+  patientId         String         @map("patient_id") @db.Uuid
+  dryRun            Boolean        @map("dry_run")
+  status            TransferStatus @default(PENDING)
+  /// e.g. "us-core@6.1.0"
+  targetProfile     String         @map("target_profile")
+  requestedBy       String         @map("requested_by")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  startedAt         DateTime?      @map("started_at")
+  finishedAt        DateTime?      @map("finished_at")
+  /// The export timestamp written into the bundle and Provenance; same inputs + same exportedAt = same bytes.
+  exportedAt        DateTime?      @map("exported_at") @db.Timestamptz(3)
+  resourcesSelected Int?           @map("resources_selected")
+  resourcesExported Int?           @map("resources_exported")
+  resourcesExcluded Int?           @map("resources_excluded")
+  /// Element-level completeness, 0..1: (kept + changed) / source elements.
+  completeness      Float?
+  /// Per-type counts and scores; ids and counts only, no PHI.
+  summary           Json?
+  /// Human-readable fidelity report (Markdown).
+  report            String?
+  /// The exported bundle as serialized (exact bytes the hash covers). Null for a dry run.
+  bundle            String?
+  bundleSha256      String?        @map("bundle_sha256")
+  bundleBytes       Int?           @map("bundle_bytes")
+  /// Failure reason (types and counts only, no PHI).
+  error             String?
+
+  patient Patient @relation(fields: [patientId], references: [id])
+
+  @@index([patientId, createdAt])
+  @@map("transfer_jobs")
 }
