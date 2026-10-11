@@ -8,6 +8,7 @@ const optional = z
 export const envSchema = z.object({
   DATABASE_URL: z.url().refine((v) => /^postgres(ql)?:\/\//.test(v), "must be a postgres URL"),
   ANTHROPIC_API_KEY: optional,
+  ANTHROPIC_MODEL: optional,
   SMART_CLIENT_ID: optional,
   SMART_ISS: z.url().optional(),
   SMART_REDIRECT_URI: z.url().optional(),
