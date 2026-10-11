@@ -51,7 +51,7 @@ function errorCode(e: unknown): string {
  * server-side refusal fallback ("default" routing), so `servedModel` can differ from `model`.
  */
 export function anthropicResponder(opts: { model?: string; client?: Anthropic } = {}): Responder {
-  const model = opts.model ?? process.env.ANTHROPIC_MODEL ?? DEFAULT_MODEL;
+  const model = opts.model || process.env.ANTHROPIC_MODEL || DEFAULT_MODEL;
   const client = opts.client ?? new Anthropic();
   return {
     name: "anthropic",

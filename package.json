@@ -26,7 +26,9 @@
     "ingest:report": "tsx scripts/ingest-report.ts",
     "map": "tsx scripts/map.ts",
     "mapping:report": "tsx scripts/mapping-report.ts",
-    "transfer": "tsx scripts/transfer.ts"
+    "transfer": "tsx scripts/transfer.ts",
+    "eval": "tsx scripts/eval.ts",
+    "eval:build": "tsx scripts/eval-build.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

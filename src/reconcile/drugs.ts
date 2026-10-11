@@ -67,7 +67,7 @@ export const INGREDIENT_CLASSES: Record<string, string[]> = {
 };
 
 /** Allergen words (allergy code display or text) -> what they cover: ingredients, or a whole class. */
-const ALLERGEN_TERMS: Record<string, { ingredients?: string[]; classes?: string[] }> = {
+export const ALLERGEN_TERMS: Record<string, { ingredients?: string[]; classes?: string[] }> = {
   aspirin: { ingredients: ["aspirin"] },
   penicillin: { classes: ["penicillin"] },
   penicillins: { classes: ["penicillin"] },
