@@ -20,7 +20,9 @@ async function main() {
       const last = await lastEncounter(db, p.id);
       if (!last) throw new Error(`patient ${p.id} has no encounters`);
       const rows = (await loadSourceRows(db, p.id)).map((r) => {
-        const { meta: _meta, text: _text, ...resource } = r.resource;
+        const resource = { ...r.resource };
+        delete resource.meta;
+        delete resource.text;
         return { ...r, resource };
       });
       out.push({
