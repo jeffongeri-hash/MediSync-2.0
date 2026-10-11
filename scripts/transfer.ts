@@ -6,7 +6,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { createDb } from "@/db";
-import { runTransfer } from "@/export/run";
+import { resolvePatient, runTransfer } from "@/export/run";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -17,7 +17,6 @@ const { values, positionals } = parseArgs({
     at: { type: "string" },
   },
 });
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const db = createDb();
 
 function write(path: string, text: string) {
@@ -34,22 +33,8 @@ async function main() {
     );
   const exportedAt = values.at ? new Date(values.at) : new Date();
   if (Number.isNaN(exportedAt.getTime())) throw new Error("--at must be an ISO 8601 instant");
-  let matches = await db.patient.findMany({
-    where: { sourcePatientId: arg },
-    select: { id: true },
-    take: 2,
-  });
-  if (!matches.length && UUID.test(arg))
-    matches = await db.patient.findMany({ where: { id: arg }, select: { id: true } });
-  if (matches.length !== 1)
-    throw new Error(
-      matches.length
-        ? "source Patient.id matches several patients; pass the internal id"
-        : "patient not found",
-    );
-
   const r = await runTransfer(db, {
-    patientId: matches[0]!.id,
+    patientId: await resolvePatient(db, arg),
     dryRun: values["dry-run"],
     actor: "cli:transfer",
     exportedAt,

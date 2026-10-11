@@ -76,6 +76,47 @@ export type TransferRunResult = {
 
 export class PatientNotFoundError extends Error {}
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Resolves a source Patient.id or an internal patient id to the internal id. */
+export async function resolvePatient(db: Pick<Db, "patient">, ref: string): Promise<string> {
+  let matches = await db.patient.findMany({
+    where: { sourcePatientId: ref },
+    select: { id: true },
+    take: 2,
+  });
+  if (!matches.length && UUID.test(ref))
+    matches = await db.patient.findMany({ where: { id: ref }, select: { id: true } });
+  if (matches.length > 1)
+    throw new PatientNotFoundError(
+      "source Patient.id matches several patients; pass the internal id",
+    );
+  if (!matches.length) throw new PatientNotFoundError("patient not found");
+  return matches[0]!.id;
+}
+
+/** A job as the API returns it: status, counts and the report, never the bundle. */
+export const JOB_VIEW = {
+  id: true,
+  patientId: true,
+  status: true,
+  dryRun: true,
+  targetProfile: true,
+  requestedBy: true,
+  createdAt: true,
+  finishedAt: true,
+  exportedAt: true,
+  resourcesSelected: true,
+  resourcesExported: true,
+  resourcesExcluded: true,
+  completeness: true,
+  bundleSha256: true,
+  bundleBytes: true,
+  error: true,
+  report: true,
+  patient: { select: { sourceSystem: true, sourcePatientId: true } },
+} as const;
+
 /**
  * Runs one transfer job for a patient (internal id). A dry run stores the job, issues, report and bundle hash but
  * not the bundle. Failures are recorded on the job (FAILED, reason without PHI) and returned, not thrown.

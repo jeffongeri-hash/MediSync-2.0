@@ -189,7 +189,7 @@ export async function loadMappingReportInput(db: Db, sourceSystem: string, mappi
       min(i.message) as example, count(*)::int as rows
     from mapping_issues i join source_records s on s.id = i.source_record_id
       left join canonical_resources c on c.id = i.canonical_resource_id
-    where s.source_system = ${sourceSystem} and i.stage <> 'INGEST'
+    where s.source_system = ${sourceSystem} and i.stage in ('MAPPING', 'DEDUPE')
     group by 1, 2, 3, 4, 5, 6, 7, 8, 9`;
   const icd = await db.$queryRaw<MappingReportInput["icd"]>`
     select s.format::text as format, count(*)::int as "snomedConditions",
