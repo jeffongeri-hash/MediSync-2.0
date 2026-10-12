@@ -6,12 +6,14 @@ import { getDb } from "@/db";
 import { CATEGORIES, type Category, type MatchKind, type RuleFlag } from "@/reconcile/build";
 import { day, type ReconRow } from "@/reconcile/rows";
 import { loadRunView, type RunView } from "@/reconcile/run";
+import { patientAccess } from "@/smart/next";
+import { LaunchBanner } from "../../smart/banner";
+import { WriteBack } from "./write-back";
 import { decide, startRun } from "../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MediSync Reconcile" };
 
-const ACTOR = "demo:provider";
 const CATEGORY_LABEL: Record<Category, string> = {
   PROBLEM: "Problems",
   MEDICATION: "Medications",
@@ -185,6 +187,9 @@ function CategoryTable({
 }) {
   const items = run.items.filter((it) => it.category === category);
   if (items.length === 0) return null;
+  const current = run.currentSourceRecordId
+    ? "Current chart (EHR, at launch)"
+    : "Current chart (as of cutoff)";
   const counts = Object.entries(
     items.reduce<Record<string, number>>(
       (m, it) => ((m[it.match] = (m[it.match] ?? 0) + 1), m),
@@ -201,7 +206,7 @@ function CategoryTable({
         <table className="ledger recon">
           <thead>
             <tr>
-              <th scope="col">Current chart (as of cutoff)</th>
+              <th scope="col">{current}</th>
               <th scope="col">Incoming (outside record)</th>
               <th scope="col">Flags</th>
               <th scope="col">Decision</th>
@@ -260,24 +265,34 @@ export default async function ReconcilePage({
   const db = getDb();
   const patient = await db.patient.findUnique({ where: { id: patientId } });
   if (!patient) notFound();
-  const run = await loadRunView(db, { patientId, actor: ACTOR });
+  // A launched patient opens only inside its own launch (SMART patient context).
+  const access = await patientAccess(patient);
+  if (!access) notFound();
+  const { session } = access;
+  const run = await loadRunView(db, { patientId, actor: access.actor });
 
   return (
     <main className="page">
       <header className="masthead">
         <div className="masthead-row">
           <p className="eyebrow">
-            <Link href="/reconcile">MediSync · Phase 4 reconciliation</Link>
+            {session ? (
+              <Link href="/smart">MediSync · SMART launch</Link>
+            ) : (
+              <Link href="/reconcile">MediSync · Phase 4 reconciliation</Link>
+            )}
           </p>
           <span className="pill pill-synthetic">Synthetic data · Synthea</span>
         </div>
         <h1>{patient.displayName ?? "Patient"}</h1>
+        {session ? <LaunchBanner session={session} name={patient.displayName} /> : null}
         <p className="lede">
-          The current chart is this patient&apos;s FHIR bundle as it stood on the cutoff date.
-          Incoming is the C-CDA from the outside organization. Accept takes the incoming version (or
-          confirms the current one when there is no incoming row), reject keeps the chart as it is,
-          and edit saves a provider-authored copy. Decisions are recorded and audited; nothing is
-          written to the chart in this phase.
+          {session
+            ? "The current chart is what the EHR returned at launch. Incoming is the synthetic outside C-CDA picked on the launch page."
+            : "The current chart is this patient\u2019s FHIR bundle as it stood on the cutoff date. Incoming is the C-CDA from the outside organization."}{" "}
+          Accept takes the incoming version (or confirms the current one when there is no incoming
+          row), reject keeps the chart as it is, and edit saves a provider-authored copy. Decisions
+          are recorded and audited; nothing is written to the chart in this phase.
         </p>
         {run ? (
           <p className="fine">
@@ -299,6 +314,7 @@ export default async function ReconcilePage({
           {CATEGORIES.map((c) => (
             <CategoryTable key={c} run={run} category={c} patientId={patientId} />
           ))}
+          {session ? <WriteBack session={session} runId={run.id} /> : null}
         </>
       ) : (
         <p>No reconciliation has been run for this patient yet.</p>

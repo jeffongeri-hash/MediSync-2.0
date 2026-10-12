@@ -1,5 +1,6 @@
 import type { Db } from "@/db";
 import { recordAudit } from "@/audit";
+import { SYNTHEA_SOURCE } from "@/ingest/seed";
 import type { CcdaSummary, FhirBundleSummary } from "@/ingest/source-summary";
 
 const PREVIEW_CHARS = 900;
@@ -13,7 +14,9 @@ export async function getDemoData(db: Db, actor: string) {
       db.mappingIssue.count({ where: { status: "OPEN" } }),
       db.auditLog.count(),
     ]),
+    // Seeded patients only; SMART-launched patients are reachable only from their launch.
     db.patient.findMany({
+      where: { sourceSystem: SYNTHEA_SOURCE },
       orderBy: { displayName: "asc" },
       select: {
         id: true,

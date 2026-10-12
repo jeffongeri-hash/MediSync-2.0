@@ -49,7 +49,28 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     return { begun, callback, token: cookieToken(begun.setCookie) };
   };
 
+  // Removes what this file creates (mock servers on 4011/4012), so other suites still see only seeded patients.
+  const cleanup = async () => {
+    const sourceSystem = { in: ["smart:127.0.0.1:4011", "smart:127.0.0.1:4012"] };
+    const patients = (
+      await db.patient.findMany({ where: { sourceSystem }, select: { id: true } })
+    ).map((p) => p.id);
+    const runs = { patientId: { in: patients } };
+    await db.reconciliationClaim.deleteMany({ where: { run: runs } });
+    await db.reconciliationItem.deleteMany({ where: { run: runs } });
+    await db.reconciliationRun.deleteMany({ where: runs });
+    await db.smartSession.deleteMany({
+      where: { iss: { in: ["http://127.0.0.1:4011/fhir", "http://127.0.0.1:4012/fhir"] } },
+    });
+    const records = { sourceRecord: { sourceSystem } };
+    await db.mappingIssue.deleteMany({ where: records });
+    await db.canonicalResource.deleteMany({ where: records });
+    await db.sourceRecord.deleteMany({ where: { sourceSystem } });
+    await db.patient.deleteMany({ where: { sourceSystem } });
+  };
+
   beforeAll(async () => {
+    await cleanup();
     await seedSynthea(db, join(process.cwd(), "fixtures/synthea"));
     await runMapping(db, { actor: "test:smart" });
     mock = await startMockSmart({
@@ -68,6 +89,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
   }, 180_000);
   afterAll(async () => {
     await mock?.close();
+    await cleanup();
     await db.$disconnect();
   });
 
@@ -110,7 +132,10 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
       Encounter: 16,
     });
     const patient = await db.patient.findUniqueOrThrow({ where: { id: s.patientId! } });
-    expect(patient).toMatchObject({ sourceSystem: "smart:127.0.0.1", sourcePatientId: GONZALO });
+    expect(patient).toMatchObject({
+      sourceSystem: "smart:127.0.0.1:4011",
+      sourcePatientId: GONZALO,
+    });
     // Paging was followed (page size 5), and every FHIR call carried the bearer token.
     expect(mock.requests.filter((r) => r.path === "/fhir/Condition").length).toBeGreaterThan(3);
     expect(

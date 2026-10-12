@@ -218,6 +218,10 @@ a {
   color: var(--done);
   background: var(--done-soft);
 }
+.pill-login {
+  color: var(--next);
+  background: var(--next-soft);
+}
 .pill-delete,
 .pill-export {
   color: var(--ccda);
@@ -517,4 +521,42 @@ button.button {
   border: 1px solid var(--rule);
   border-radius: var(--radius);
   padding: 0.7rem;
+}
+
+/* SMART launch (Phase 5) */
+.launch-banner {
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--accent);
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 0.7rem 0.9rem;
+  margin: 0 0 1rem;
+}
+.launch-banner dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.2rem 0.9rem;
+  margin: 0;
+}
+.launch-banner dt {
+  color: var(--muted);
+}
+.launch-banner dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+.pick select {
+  font: inherit;
+  max-width: 100%;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
 }

@@ -1,0 +1,50 @@
+// GET /smart/writeback/:runId: the dry-run write-back package for a run of the launched patient, as a JSON download.
+// It is never sent to the EHR. The download itself is an EXPORT audit entry.
+import { NextResponse, type NextRequest } from "next/server";
+import { z } from "zod";
+import { recordAudit } from "@/audit";
+import { getDb } from "@/db";
+import type { CapabilitySummary } from "@/smart/capability";
+import { actorOf } from "@/smart/launch";
+import { currentSession } from "@/smart/next";
+import { buildWritePackage, loadWriteItems } from "@/smart/writeback";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
+  const { runId } = await params;
+  const session = await currentSession();
+  if (!z.uuid().safeParse(runId).success || !session?.authorizedAt || !session.patientId)
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const db = getDb();
+  const run = await db.reconciliationRun.findFirst({
+    where: { id: runId, patientId: session.patientId },
+    select: { id: true },
+  });
+  if (!run) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  const capability =
+    ((session.fetchSummary ?? {}) as { capability?: CapabilitySummary | null }).capability ?? null;
+  const pkg = buildWritePackage({
+    runId,
+    items: await loadWriteItems(db, runId),
+    capability,
+    fhirPatientId: session.fhirPatientId ?? "",
+    now: new Date(),
+  });
+  await recordAudit(db, {
+    actor: actorOf(session),
+    action: "EXPORT",
+    patientId: session.patientId,
+    entityType: "ReconciliationRun",
+    entityId: runId,
+    source: "writeback-dry-run",
+    details: { candidates: pkg.candidates.length, viaFhir: pkg.bundle.entry.length, sent: false },
+  });
+  return new NextResponse(JSON.stringify(pkg, null, 2), {
+    headers: {
+      "content-type": "application/json",
+      "content-disposition": `attachment; filename="writeback-dry-run-${runId}.json"`,
+      "cache-control": "no-store",
+    },
+  });
+}

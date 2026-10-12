@@ -88,8 +88,8 @@ export function allowedIss(cfg: SmartConfig, iss: string | null | undefined): st
   return cfg.issAllowlist.find((a) => a === n) ?? null;
 }
 
-/** Source system for rows read from a SMART server: "epic-sandbox" for Epic's sandbox host, else smart:<host>. */
+/** Source system for rows read from a SMART server: "epic-sandbox" for Epic's sandbox host, else smart:<host[:port]>. */
 export function sourceSystemFor(iss: string): string {
-  const host = new URL(iss).hostname;
-  return host === "fhir.epic.com" ? "epic-sandbox" : `smart:${host}`;
+  const u = new URL(iss);
+  return u.hostname === "fhir.epic.com" ? "epic-sandbox" : `smart:${u.host}`;
 }

@@ -1,13 +1,23 @@
 "use server";
 // Reconcile form actions. Plain <form> posts, so they work without client JS. No authentication until Phase 6:
-// decisions are attributed to a fixed demo provider. Nothing here writes canonical rows.
+// decisions on the seeded patients are attributed to a fixed demo provider; on a patient opened by a SMART launch,
+// to the launch's fhirUser, and only from that launch. Nothing here writes canonical rows.
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { DecisionError, recordDecision, runReconciliation } from "@/reconcile/run";
+import { patientAccess } from "@/smart/next";
 
-const ACTOR = "demo:provider";
+async function access(patientId: string) {
+  const patient = await getDb().patient.findUniqueOrThrow({
+    where: { id: patientId },
+    select: { id: true, sourceSystem: true },
+  });
+  const a = await patientAccess(patient);
+  if (!a) redirect("/smart?error=no_session");
+  return a;
+}
 
 const runForm = z.object({ patientId: z.uuid() });
 const decideForm = z.object({
@@ -32,8 +42,24 @@ const field = (fd: FormData, k: string) => {
 export async function startRun(formData: FormData) {
   const { patientId } = runForm.parse({ patientId: field(formData, "patientId") });
   const db = getDb();
-  await db.patient.findUniqueOrThrow({ where: { id: patientId } });
-  await runReconciliation(db, { patientId, actor: ACTOR });
+  const { actor, session } = await access(patientId);
+  if (session) {
+    // A launched patient re-runs against the same outside record it was last reconciled with.
+    const last = await db.reconciliationRun.findFirst({
+      where: { patientId, incomingPatientId: { not: null } },
+      orderBy: { createdAt: "desc" },
+      select: { incomingPatientId: true },
+    });
+    if (!last?.incomingPatientId || !session.sourceRecordId) redirect("/smart");
+    await runReconciliation(db, {
+      patientId,
+      actor,
+      scope: {
+        currentSourceRecordId: session.sourceRecordId,
+        incomingPatientId: last.incomingPatientId,
+      },
+    });
+  } else await runReconciliation(db, { patientId, actor });
   revalidatePath("/reconcile", "layout");
   redirect(`/reconcile/${patientId}`);
 }
@@ -47,9 +73,14 @@ export async function decide(formData: FormData) {
       ]),
     ),
   );
+  const { actor } = await access(f.patientId);
   const target = f.itemId ? { itemId: f.itemId } : f.claimId ? { claimId: f.claimId } : null;
   let error: string | null = null;
-  if (!target) error = "Nothing to decide on.";
+  const ownRun = await getDb().reconciliationRun.count({
+    where: { id: f.runId, patientId: f.patientId },
+  });
+  if (!ownRun) error = "That run does not belong to this patient.";
+  else if (!target) error = "Nothing to decide on.";
   else {
     let editedResource: unknown;
     if (f.action === "EDIT") {
@@ -65,7 +96,7 @@ export async function decide(formData: FormData) {
           runId: f.runId,
           target,
           action: f.action,
-          actor: ACTOR,
+          actor,
           note: f.note,
           editedResource,
         });

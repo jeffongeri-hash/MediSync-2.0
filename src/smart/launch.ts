@@ -173,11 +173,14 @@ export async function completeLaunch(
     actor,
   );
   await runMapping(db, { actor });
-  const patient = await db.patient.findUnique({
-    where: { sourceSystem_sourcePatientId: { sourceSystem, sourcePatientId: fhirPatientId } },
-    select: { id: true },
+  // The patient index row the read was attributed to. An unchanged chart is the same bytes, hence the same (already
+  // ingested) source record, so look it up through the record rather than re-deriving it.
+  const read = await db.sourceRecord.findUniqueOrThrow({
+    where: { id: ingest.sourceRecordId },
+    select: { patient: { select: { id: true, sourcePatientId: true } } },
   });
-  if (!patient) throw new LaunchError("read_failed");
+  const patient = read.patient;
+  if (!patient || patient.sourcePatientId !== fhirPatientId) throw new LaunchError("read_failed");
 
   // The token was needed only for this read: drop it (and the PKCE state) instead of keeping a credential around.
   const done = await db.smartSession.update({

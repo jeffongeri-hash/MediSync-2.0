@@ -6,12 +6,11 @@ import { recordAudit } from "@/audit";
 import { getDb } from "@/db";
 import type { ReconRow } from "@/reconcile/rows";
 import { RECONCILE_SOURCE } from "@/reconcile/run";
+import { patientAccess } from "@/smart/next";
 import { decide } from "../../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MediSync Reconcile · Edit" };
-
-const ACTOR = "demo:provider";
 
 // Edit = a provider-authored copy of the incoming row (or the current one when there is none), validated against the
 // canonical schema on save. The copy is stored on the decision; canonical rows are never written.
@@ -26,6 +25,13 @@ export default async function EditItemPage({
   const { error } = await searchParams;
   if (!z.uuid().safeParse(patientId).success || !z.uuid().safeParse(itemId).success) notFound();
   const db = getDb();
+  const patient = await db.patient.findUnique({
+    where: { id: patientId },
+    select: { id: true, sourceSystem: true },
+  });
+  if (!patient) notFound();
+  const access = await patientAccess(patient);
+  if (!access) notFound();
   const item = await db.reconciliationItem.findFirst({
     where: { id: itemId, run: { patientId } },
     include: { run: { select: { id: true } } },
@@ -38,9 +44,10 @@ export default async function EditItemPage({
     orderBy: { id: "desc" },
   });
   await recordAudit(db, {
-    actor: ACTOR,
+    actor: access.actor,
     action: "READ",
-    patientId,
+    // The row read may be the outside record's (another patient index row in a SMART launch run).
+    patientId: source.patientId,
     entityType: source.resourceType,
     entityId: source.id,
     source: RECONCILE_SOURCE,

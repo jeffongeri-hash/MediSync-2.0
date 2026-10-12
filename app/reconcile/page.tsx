@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { recordAudit } from "@/audit";
 import { getDb } from "@/db";
+import { SYNTHEA_SOURCE } from "@/ingest/seed";
 import { RECONCILE_SOURCE } from "@/reconcile/run";
 import { startRun } from "./actions";
 
@@ -13,7 +14,9 @@ const when = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC
 
 export default async function ReconcileIndex() {
   const db = getDb();
+  // Seeded patients only: a patient read through a SMART launch opens from that launch (/smart), never from a list.
   const patients = await db.patient.findMany({
+    where: { sourceSystem: SYNTHEA_SOURCE },
     orderBy: { displayName: "asc" },
     select: {
       id: true,
