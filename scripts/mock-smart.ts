@@ -1,5 +1,5 @@
 // Runs the TEST-ONLY mock SMART server (tests/mock-smart/server.ts) for Playwright and local demos. It serves synthetic
-// Synthea patients and is not the Epic sandbox. Env: MOCK_SMART_PORT (4010), MOCK_SMART_CLIENT_ID, MOCK_SMART_REDIRECT_URIS.
+// Synthea patients and is not a real EHR sandbox. Env: MOCK_SMART_PORT (4010), MOCK_SMART_CLIENT_ID, MOCK_SMART_REDIRECT_URIS.
 import { join } from "node:path";
 import { startMockSmart } from "../tests/mock-smart/server";
 

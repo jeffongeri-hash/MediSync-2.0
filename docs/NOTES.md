@@ -89,7 +89,7 @@ build container's network policy. Re-check when those hosts are reachable, and n
   also 403, so SMART App Launch v2 rules were not re-checked. SMART_CLIENT_ID is not set. Node's fetch here does not use
   HTTPS_PROXY (ENOTFOUND), so `pnpm smart:capability` must run where fhir.epic.com resolves.
 - Epic write-back: NOT yet documented from Epic's CapabilityStatement. Pending the manual run in docs/EPIC_SANDBOX.md, which
-  writes docs/reports/phase5-writeback.md (+ raw JSON). The secondary-source guesses above stay unverified.
+  writes docs/reports/phase5-writeback-epic-sandbox.md (+ raw JSON). The secondary-source guesses above stay unverified.
 - fhirclient 3.0.0: entry points `browser`, `node` (Node req/res) and `hapi` only; `types/types.d.ts` is missing from the
   package, so its public types resolve to `any` (skipLibCheck). `ready()` takes `state` from the URL and looks it up in the
   storage we give it, so binding a launch to the browser comes from the per-cookie storage.
@@ -99,3 +99,13 @@ build container's network policy. Re-check when those hosts are reachable, and n
   and whether the sandbox launches the app in a cross-site iframe (a SameSite=Lax cookie would then not reach the callback).
 - Verified only against the test mock (tests/mock-smart): EHR + standalone launch, PKCE, state binding, paging, partial
   read failure, the reconcile flow inside the launch and the dry-run write-back (tests/db/smart.test.ts, tests/e2e/smart.spec.ts).
+
+## Oracle Health sandbox (Phase 5, 2026-10-12)
+- Blocked by the network policy (proxy CONNECT 403): fhir-ehr-code.cerner.com, fhir-open.cerner.com, authorization.cerner.com,
+  code-console.cerner.com, fhir.cerner.com, docs.oracle.com. Nothing about Oracle Health was verified from here.
+- From memory, unverified: sandbox iss `https://fhir-ehr-code.cerner.com/r4/ec2458f2-1e24-41c8-b71b-0e701af7583d` (secure
+  tenant; fhir-open.cerner.com is the unauthenticated twin and is not a SMART server); authorization on authorization.cerner.com;
+  SMART v1 and v2 scopes both accepted; provider apps may need `user/` instead of `patient/` scopes; Medication may not be a
+  separately readable resource (MedicationRequest carries medicationCodeableConcept); PKCE S256 advertised for public clients.
+- Write-back: NOT documented. Pending docs/ORACLE_SANDBOX.md step 6 (docs/reports/phase5-writeback-oracle-sandbox.md).
+- Verified only against two mock servers with separate client ids (tests/db/smart.test.ts, tests/e2e/smart.spec.ts).

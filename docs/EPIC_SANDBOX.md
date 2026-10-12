@@ -22,8 +22,9 @@ the difference in docs/NOTES.md.
 
 ```
 cp .env.example .env
-# SMART_CLIENT_ID=<non-production client id>
-# SMART_ISS="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4"
+# SMART_SERVERS=epic            (or "epic,oracle" with docs/ORACLE_SANDBOX.md)
+# SMART_EPIC_CLIENT_ID=<non-production client id>
+# SMART_EPIC_ISS="https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4"
 # SMART_REDIRECT_URI="http://localhost:3000/smart/callback"
 # SESSION_SECRET=<openssl rand -base64 32>
 pnpm install && pnpm db:deploy && pnpm db:seed
@@ -32,7 +33,7 @@ pnpm dev
 
 ## 3. Standalone launch
 
-Open `http://localhost:3000/smart`, click **Standalone launch**, sign in at Epic with a sandbox test user from
+Open `http://localhost:3000/smart`, click **Standalone launch: Epic sandbox (epic)**, sign in at Epic with a sandbox test user from
 fhir.epic.com's test data page, and pick a test patient. You should land back on `/smart` with the launch banner (server,
 user, patient) and the **Read at launch** table.
 
@@ -50,10 +51,10 @@ sent)** section. Nothing is written to Epic.
 ## 6. Record the write-back the sandbox allows
 
 ```
-pnpm smart:capability --raw docs/reports/epic-sandbox-capability.json
+pnpm smart:capability --server epic --raw docs/reports/epic-sandbox-capability.json
 ```
 
-Reads `{iss}/metadata` (public) and writes `docs/reports/phase5-writeback.md`. Commit both files.
+Reads `{iss}/metadata` (public) and writes `docs/reports/phase5-writeback-epic-sandbox.md`. Commit both files.
 
 ## What to send back
 
@@ -66,7 +67,7 @@ Reads `{iss}/metadata` (public) and writes `docs/reports/phase5-writeback.md`. C
 | Shown on /smart | Likely cause |
 | --- | --- |
 | not configured | a SMART_* variable or SESSION_SECRET is missing (`.env`) |
-| iss not on the allowlist | the launcher's iss differs from SMART_ISS (check the exact URL, trailing parts) |
+| iss not on the allowlist | the launcher's iss differs from SMART_EPIC_ISS (check the exact URL, trailing parts) |
 | could not read the SMART configuration | `.well-known/smart-configuration` unreachable, or S256 not advertised (PKCE is required) |
 | declined the request | Epic returned `error` (wrong client id, redirect URI or scopes; or not yet propagated) |
 | no launch in progress / does not belong to this launch | the session cookie did not come back to the callback, e.g. the launcher embeds the app in a cross-site iframe; open it in a new window |
@@ -77,5 +78,5 @@ Reads `{iss}/metadata` (public) and writes `docs/reports/phase5-writeback.md`. C
 ## Local mock (no Epic)
 
 `pnpm mock:smart` starts the test-only mock at `http://127.0.0.1:4010/fhir` (client id `medisync-mock-client`). With
-`SMART_ISS` and `SMART_CLIENT_ID` set to those values, `/smart/login` works offline, and the EHR launch URL the mock prints
+`SMART_SERVERS` empty and `SMART_ISS` / `SMART_CLIENT_ID` set to those values, `/smart/login` works offline, and the EHR launch URL the mock prints
 simulates an EHR launch. The mock's CapabilityStatement is a test fixture; never use its report as Epic's.

@@ -23,8 +23,8 @@ Target profile (start with a US Core-conformant FHIR bundle). Dry-run diff ("wha
 ## Phase 4: Reconciliation + AI (Capability 2)
 Side-by-side reconcile UI: incoming vs. current chart (meds, problems, allergies, PMH). Deterministic rules flag conflicts and duplicates; a cited PMH summary is rule-built by default, or written by Claude when ANTHROPIC_API_KEY is set (optional enhancement: Claude adds AI flags for what the rules cannot see). Accept/reject/edit per item, audit-logged. Evals: 20 synthetic cases checking that every claim has a valid source id and that there are no hallucinated conditions. Gate (no API key needed): key-free eval reported, i.e. the default summary passes the citation and condition checks on all 20 cases, rules catch every rule-detectable injected change, and the scorer rejects bad answers. The Claude pass rate is measured later with `pnpm eval --live` once a key exists; it is not part of the gate.
 
-## Phase 5: Epic SMART launch (sandbox)
-EHR launch + standalone launch, OAuth2/PKCE, scopes, patient context, fetch via Epic sandbox test patients. Embed the Phase 4 UI in the launch flow. Document what write-back the sandbox allows. Gate: launched from the sandbox with a test patient, read plus review flow working.
+## Phase 5: SMART launch (Epic and Oracle Health sandboxes)
+EHR launch + standalone launch, OAuth2/PKCE, scopes, patient context, fetch via sandbox test patients, for Epic and for Oracle Health (Cerner) Millennium. Embed the Phase 4 UI in the launch flow. Document what write-back each sandbox allows. Gate: launched from each sandbox with a test patient, read plus review flow working.
 
 ## Phase 6: Hardening
 Role-based access, encryption at rest, audit export, rate limits, error handling, a10y pass, security checklist, README for Epic review prep.

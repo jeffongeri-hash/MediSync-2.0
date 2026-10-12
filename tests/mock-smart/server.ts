@@ -1,7 +1,7 @@
 // TEST-ONLY mock of a SMART on FHIR server: discovery, an auto-approving authorization endpoint (PKCE S256 enforced),
 // a token endpoint, a simulated EHR launcher, and a read-only FHIR API over synthetic Synthea patients. It stands in
-// for the Epic sandbox, which this build container cannot reach. Its CapabilityStatement is a fixture written for
-// tests; it says nothing about what Epic supports.
+// for the Epic and Oracle Health sandboxes, which this build container cannot reach. Its CapabilityStatement is a
+// fixture written for tests; it says nothing about what any EHR supports.
 import { createHash, createHmac, randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -101,7 +101,7 @@ function capabilityStatement(iss: string, base: string) {
     resourceType: "CapabilityStatement",
     status: "active",
     date: "2026-10-12",
-    publisher: "MediSync test mock (not Epic)",
+    publisher: "MediSync test mock (not a real EHR)",
     kind: "instance",
     software: { name: "MediSync mock SMART server", version: "test" },
     implementation: { description: "Test fixture standing in for a SMART sandbox", url: iss },
