@@ -49,9 +49,10 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     return { begun, callback, token: cookieToken(begun.setCookie) };
   };
 
-  // Removes what this file creates (mock servers on 4011/4012), so other suites still see only seeded patients.
+  // Removes what this file creates (mock servers on 4011-4013), so other suites still see only seeded patients.
   const cleanup = async () => {
-    const sourceSystem = { in: ["smart:127.0.0.1:4011", "smart:127.0.0.1:4012"] };
+    const ports = [4011, 4012, 4013];
+    const sourceSystem = { in: ports.map((p) => `smart:127.0.0.1:${p}`) };
     const patients = (
       await db.patient.findMany({ where: { sourceSystem }, select: { id: true } })
     ).map((p) => p.id);
@@ -60,7 +61,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     await db.reconciliationItem.deleteMany({ where: { run: runs } });
     await db.reconciliationRun.deleteMany({ where: runs });
     await db.smartSession.deleteMany({
-      where: { iss: { in: ["http://127.0.0.1:4011/fhir", "http://127.0.0.1:4012/fhir"] } },
+      where: { iss: { in: ports.map((p) => `http://127.0.0.1:${p}/fhir`) } },
     });
     const records = { sourceRecord: { sourceSystem } };
     await db.mappingIssue.deleteMany({ where: records });
@@ -245,7 +246,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
       failTypes: ["Encounter"],
     });
     try {
-      const c2 = { ...cfg, issAllowlist: [failing.iss] };
+      const c2 = { ...cfg, servers: [{ ...cfg.servers[0]!, iss: failing.iss }] };
       const res = await fetch(failing.ehrLaunchUrl(`${APP}/smart/launch`, mockId(ERIK)), {
         redirect: "manual",
       });
@@ -271,6 +272,79 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
       expect(s.fhirPatientId).toBe(mockId(ERIK));
     } finally {
       await failing.close();
+    }
+  }, 60_000);
+
+  it("two EHRs (named servers): each launch goes to its own server with its own client id", async () => {
+    const other = await startMockSmart({
+      port: 4013,
+      clientId: "oracle-client",
+      redirectUris: [`${APP}/smart/callback`],
+      bundles: [BUNDLES[1]!],
+    });
+    const named = (oracleClientId: string) =>
+      smartConfig({
+        SMART_SERVERS: "epic,oracle",
+        SMART_EPIC_ISS: mock.iss,
+        SMART_EPIC_CLIENT_ID: "test-client",
+        SMART_ORACLE_ISS: other.iss,
+        SMART_ORACLE_CLIENT_ID: oracleClientId,
+        SMART_REDIRECT_URI: `${APP}/smart/callback`,
+        SESSION_SECRET: Buffer.alloc(32, 7).toString("base64"),
+      });
+    const code = (p: Promise<unknown>) =>
+      p.then(
+        () => "ok",
+        (e: unknown) => (e instanceof LaunchError ? e.code : String(e)),
+      );
+    try {
+      const c2 = named("oracle-client");
+      // EHR launch from the second server: routed by its iss, authorized with its client id.
+      const res = await fetch(other.ehrLaunchUrl(`${APP}/smart/launch`), { redirect: "manual" });
+      const to = new URL(res.headers.get("location")!);
+      const begun = await beginLaunch(db, c2, {
+        kind: "ehr",
+        iss: to.searchParams.get("iss"),
+        launch: to.searchParams.get("launch"),
+        secure: false,
+      });
+      const auth = new URL(begun.location);
+      expect(auth.origin).toBe(other.base);
+      expect(auth.searchParams.get("client_id")).toBe("oracle-client");
+      const s = await completeLaunch(db, c2, {
+        url: await authorizeAt(begun.location),
+        token: cookieToken(begun.setCookie),
+      });
+      expect(s).toMatchObject({ iss: other.iss, fhirPatientId: mockId(ERIK) });
+      const patient = await db.patient.findUniqueOrThrow({ where: { id: s.patientId! } });
+      expect(patient.sourceSystem).toBe("smart:127.0.0.1:4013");
+
+      // Standalone launch picks the server by name.
+      const epic = new URL(
+        (await beginLaunch(db, c2, { kind: "standalone", server: "epic", secure: false })).location,
+      );
+      expect([epic.origin, epic.searchParams.get("client_id")]).toEqual([mock.base, "test-client"]);
+      const oracle = new URL(
+        (await beginLaunch(db, c2, { kind: "standalone", server: "oracle", secure: false }))
+          .location,
+      );
+      expect([oracle.origin, oracle.searchParams.get("client_id")]).toEqual([
+        other.base,
+        "oracle-client",
+      ]);
+      expect(
+        await code(beginLaunch(db, c2, { kind: "standalone", server: "cerner", secure: false })),
+      ).toBe("unknown_server");
+
+      // The other registration's client id is refused by the server.
+      const wrong = await beginLaunch(db, named("test-client"), {
+        kind: "standalone",
+        server: "oracle",
+        secure: false,
+      });
+      expect((await fetch(wrong.location, { redirect: "manual" })).status).toBe(400);
+    } finally {
+      await other.close();
     }
   }, 60_000);
 

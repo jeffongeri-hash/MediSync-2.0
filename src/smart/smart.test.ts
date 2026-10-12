@@ -2,10 +2,13 @@ import { describe, expect, it } from "vitest";
 import { parseFhirBundle } from "@/ingest/parse-fhir";
 import { renderWritebackReport, summarizeCapability, supports } from "@/smart/capability";
 import {
-  allowedIss,
   launchScope,
+  serverByName,
+  serverForIss,
+  serverLabel,
   smartConfig,
   SmartConfigError,
+  smartServers,
   sourceSystemFor,
 } from "@/smart/config";
 import { seal, sessionIdOf, unseal } from "@/smart/crypto";
@@ -26,17 +29,49 @@ const env = {
   SMART_REDIRECT_URI: "http://localhost:3000/smart/callback",
   SESSION_SECRET: SECRET,
 };
+const ORACLE_ISS = "https://fhir-ehr-code.cerner.com/r4/tenant-id";
+const named = {
+  SMART_SERVERS: "epic, oracle",
+  SMART_EPIC_ISS: "https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4",
+  SMART_EPIC_CLIENT_ID: "epic-client",
+  SMART_ORACLE_ISS: `${ORACLE_ISS}/`,
+  SMART_ORACLE_CLIENT_ID: "oracle-client",
+  SMART_ORACLE_SCOPE: "patient/Patient.rs patient/Condition.rs",
+  SMART_REDIRECT_URI: "http://localhost:3000/smart/callback",
+  SESSION_SECRET: SECRET,
+};
 
 describe("smartConfig", () => {
-  it("parses an iss allowlist, default read scopes and the session key", () => {
+  it("single-server form: an iss list sharing one client id, default read scopes, the session key", () => {
     const cfg = smartConfig(env);
-    expect(cfg.issAllowlist).toEqual([ISS, "http://127.0.0.1:4010/fhir"]);
-    expect(cfg.readScopes.split(" ")).toContain("patient/AllergyIntolerance.read");
-    expect(cfg.readScopes).not.toContain("*");
+    expect(cfg.servers.map((s) => [s.name, s.iss, s.clientId])).toEqual([
+      ["default", ISS, "c"],
+      ["default-2", "http://127.0.0.1:4010/fhir", "c"],
+    ]);
+    expect(cfg.servers[0]!.readScopes.split(" ")).toContain("patient/AllergyIntolerance.read");
+    expect(cfg.servers[0]!.readScopes).not.toContain("*");
     expect(cfg.sessionKey).toHaveLength(32);
     expect(
-      smartConfig({ ...env, SMART_SCOPE: " patient/Patient.rs  patient/Condition.rs " }).readScopes,
+      smartConfig({ ...env, SMART_SCOPE: " patient/Patient.rs  patient/Condition.rs " }).servers[0]!
+        .readScopes,
     ).toBe("patient/Patient.rs patient/Condition.rs");
+  });
+
+  it("named form: one registration per EHR, each with its own client id and optional scopes", () => {
+    const cfg = smartConfig({
+      ...named,
+      SMART_CLIENT_ID: "ignored",
+      SMART_ISS: "https://ignored.test",
+    });
+    expect(cfg.servers.map((s) => [s.name, s.iss, s.clientId])).toEqual([
+      ["epic", named.SMART_EPIC_ISS, "epic-client"],
+      ["oracle", ORACLE_ISS, "oracle-client"],
+    ]);
+    expect(serverByName(cfg, "Oracle")?.readScopes).toBe("patient/Patient.rs patient/Condition.rs");
+    expect(serverByName(cfg, "epic")?.readScopes).toContain("patient/Condition.read");
+    expect(serverByName(cfg, "cerner")).toBeNull();
+    // Scripts read the servers without the session secret.
+    expect(smartServers({ ...named, SESSION_SECRET: "" })).toHaveLength(2);
   });
 
   it("names missing or weak settings without echoing values", () => {
@@ -48,24 +83,34 @@ describe("smartConfig", () => {
     expect(() => smartConfig({ ...env, SMART_ISS: "ftp://secret-host" })).toThrow(
       expect.objectContaining({ message: expect.not.stringContaining("secret-host") }),
     );
+    expect(() => smartConfig({ ...named, SMART_ORACLE_CLIENT_ID: "" })).toThrow(
+      /SMART_ORACLE_CLIENT_ID/,
+    );
+    expect(() => smartConfig({ ...named, SMART_SERVERS: "epic,epic" })).toThrow(/SMART_SERVERS/);
+    expect(() => smartConfig({ ...named, SMART_SERVERS: "Epic Sandbox" })).toThrow(/SMART_SERVERS/);
+    expect(() => smartConfig({ ...named, SMART_ORACLE_ISS: named.SMART_EPIC_ISS })).toThrow(
+      /distinct ISS/,
+    );
   });
 
-  it("accepts only an exact allowlisted iss, and builds scopes per launch kind", () => {
-    const cfg = smartConfig(env);
-    expect(allowedIss(cfg, `${ISS}/`)).toBe(ISS);
-    expect(allowedIss(cfg, `${ISS}/../other`)).toBeNull();
-    expect(allowedIss(cfg, `${ISS}x`)).toBeNull();
-    expect(allowedIss(cfg, null)).toBeNull();
+  it("matches only an exact configured iss, and builds scopes per launch kind", () => {
+    const cfg = smartConfig(named);
+    expect(serverForIss(cfg, `${ORACLE_ISS}/`)?.name).toBe("oracle");
+    expect(serverForIss(cfg, `${ORACLE_ISS}/../other`)).toBeNull();
+    expect(serverForIss(cfg, `${ORACLE_ISS}x`)).toBeNull();
+    expect(serverForIss(cfg, null)).toBeNull();
     expect(launchScope("ehr", "patient/Patient.read")).toBe(
       "launch openid fhirUser patient/Patient.read",
     );
     expect(launchScope("standalone", "patient/Patient.read")).toBe(
       "launch/patient openid fhirUser patient/Patient.read",
     );
-    expect(sourceSystemFor("https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4")).toBe(
-      "epic-sandbox",
-    );
+    expect(sourceSystemFor(named.SMART_EPIC_ISS)).toBe("epic-sandbox");
+    expect(sourceSystemFor(ORACLE_ISS)).toBe("oracle-sandbox");
     expect(sourceSystemFor(ISS)).toBe("smart:ehr.example.test");
+    expect(sourceSystemFor("http://127.0.0.1:4010/fhir")).toBe("smart:127.0.0.1:4010");
+    expect(serverLabel(ORACLE_ISS)).toBe("Oracle Health sandbox");
+    expect(serverLabel("http://127.0.0.1:4010/fhir")).toBe("127.0.0.1:4010");
   });
 });
 

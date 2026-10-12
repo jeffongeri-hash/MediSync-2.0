@@ -34,6 +34,7 @@ export async function launchRoute(req: NextRequest, kind: LaunchKind): Promise<N
     const r = await beginLaunch(getDb(), cfg, {
       kind,
       iss: q.get("iss"),
+      server: q.get("server"),
       launch: q.get("launch"),
       secure: cfg.redirectUri.startsWith("https:"),
     });

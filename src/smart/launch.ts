@@ -8,9 +8,10 @@ import { runMapping } from "@/mapping/run";
 import { authorizeUrl, completeAuthorization } from "@/smart/adapter";
 import { summarizeCapability, type CapabilitySummary } from "@/smart/capability";
 import {
-  allowedIss,
   launchScope,
   normalizeIss,
+  serverByName,
+  serverForIss,
   sourceSystemFor,
   type LaunchKind,
   type SmartConfig,
@@ -40,6 +41,7 @@ export class LaunchError extends Error {
 export const LAUNCH_ERRORS: Record<string, string> = {
   config: "SMART launch is not configured on this server (see .env.example).",
   iss_not_allowed: "This FHIR server (iss) is not on the allowlist.",
+  unknown_server: "No SMART server with that name is configured.",
   missing_launch: "An EHR launch needs a launch parameter.",
   discovery_failed: "Could not read the server's SMART configuration.",
   server_not_smart: "The server did not advertise an authorization endpoint.",
@@ -57,10 +59,29 @@ export const actorOf = (s: Pick<SmartSession, "fhirUser">) =>
 export async function beginLaunch(
   db: Db,
   cfg: SmartConfig,
-  input: { kind: LaunchKind; iss?: string | null; launch?: string | null; secure: boolean },
+  input: {
+    kind: LaunchKind;
+    iss?: string | null;
+    /** Standalone only: a configured server name (SMART_SERVERS). */
+    server?: string | null;
+    launch?: string | null;
+    secure: boolean;
+  },
 ): Promise<{ location: string; setCookie: string; sessionId: string }> {
-  const iss = input.kind === "ehr" || input.iss ? allowedIss(cfg, input.iss) : cfg.issAllowlist[0]!;
-  if (!iss) throw new LaunchError("iss_not_allowed");
+  // EHR launch: the server is the one whose iss the EHR sent. Standalone: ?server, else ?iss, else the first one.
+  const server =
+    input.kind === "ehr"
+      ? serverForIss(cfg, input.iss)
+      : input.server
+        ? serverByName(cfg, input.server)
+        : input.iss
+          ? serverForIss(cfg, input.iss)
+          : (cfg.servers[0] ?? null);
+  if (!server)
+    throw new LaunchError(
+      input.kind === "standalone" && input.server ? "unknown_server" : "iss_not_allowed",
+    );
+  const iss = server.iss;
   const launch = input.launch?.trim();
   if (input.kind === "ehr" && !launch) throw new LaunchError("missing_launch");
   if (launch && launch.length > 4096) throw new LaunchError("missing_launch");
@@ -73,8 +94,8 @@ export async function beginLaunch(
   let location: string;
   try {
     location = await authorizeUrl(here, storage, {
-      clientId: cfg.clientId,
-      scope: launchScope(input.kind, cfg.readScopes),
+      clientId: server.clientId,
+      scope: launchScope(input.kind, server.readScopes),
       redirectUri: cfg.redirectUri,
       iss,
       launch,
@@ -99,6 +120,7 @@ export async function completeLaunch(
   const session = await findSession(db, input.token, deps.now?.() ?? new Date());
   if (!session) throw new LaunchError("no_session");
   if (session.authorizedAt) return session;
+  if (!serverForIss(cfg, session.iss)) throw new LaunchError("iss_not_allowed");
   const authError = input.url.searchParams.get("error");
   if (authError) throw new LaunchError("denied");
 
