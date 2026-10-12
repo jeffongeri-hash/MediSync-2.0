@@ -28,7 +28,9 @@
     "mapping:report": "tsx scripts/mapping-report.ts",
     "transfer": "tsx scripts/transfer.ts",
     "eval": "tsx scripts/eval.ts",
-    "eval:build": "tsx scripts/eval-build.ts"
+    "eval:build": "tsx scripts/eval-build.ts",
+    "mock:smart": "tsx scripts/mock-smart.ts",
+    "smart:capability": "tsx scripts/smart-capability.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

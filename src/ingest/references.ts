@@ -23,8 +23,10 @@ export function indexBundleEntries(entries: Entry[], into: ReferenceIndex = new 
 const LOCAL = /^urn:(uuid|oid):|\?/;
 
 /**
- * Returns a deep copy with every resolvable `reference` rewritten to "Type/id". Literal and contained ("#x")
- * references are left as they are; local ones that cannot be resolved are returned as JSON paths (no values).
+ * Returns a deep copy with every resolvable `reference` rewritten to "Type/id". Local references (urn:uuid, urn:oid,
+ * conditional) and absolute URLs equal to an indexed fullUrl (a FHIR server's own references) are resolved;
+ * contained ("#x") and other literal references are left as they are. Local ones that cannot be resolved are
+ * returned as JSON paths (no values).
  */
 export function rewriteReferences<T>(resource: T, index: ReferenceIndex, basePath: string): { resource: T; unresolved: string[] } {
   const unresolved: string[] = [];
@@ -33,7 +35,7 @@ export function rewriteReferences<T>(resource: T, index: ReferenceIndex, basePat
     if (typeof node !== "object" || node === null) return node;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node)) {
-      if (k === "reference" && typeof v === "string" && LOCAL.test(v) && !v.startsWith("#")) {
+      if (k === "reference" && typeof v === "string" && !v.startsWith("#") && (LOCAL.test(v) || index.has(v))) {
         const hit = index.get(v);
         if (!hit) unresolved.push(`${path}.reference`);
         out[k] = hit ?? v;

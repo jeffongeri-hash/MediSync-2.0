@@ -7,7 +7,7 @@ import { summarize } from "@/ai/summarize";
 import { toCanonical } from "@/canonical";
 import type { Prisma } from "@/generated/prisma/client";
 import { buildReconciliation, distinctFlags, type ReconItem } from "@/reconcile/build";
-import { lastEncounter, loadSourceRows } from "@/reconcile/load";
+import { lastEncounter, loadSourceRows, type RowScope } from "@/reconcile/load";
 import { defaultCutoff, type ReconRow } from "@/reconcile/rows";
 
 export const RECONCILE_SOURCE = "reconcile";
@@ -24,11 +24,12 @@ const count = <T>(xs: T[], key: (x: T) => string) =>
 
 export async function runReconciliation(
   db: Db,
-  opts: { patientId: string; actor: string; cutoff?: Date; responder?: Responder },
+  opts: { patientId: string; actor: string; cutoff?: Date; responder?: Responder; scope?: RowScope },
 ): Promise<{ runId: string }> {
-  const { patientId, actor } = opts;
-  const rows = await loadSourceRows(db, patientId);
-  const last = await lastEncounter(db, patientId);
+  const { patientId, actor, scope } = opts;
+  const rows = await loadSourceRows(db, patientId, scope);
+  // A scoped (SMART) run compares against the live chart as read, so its cutoff is the run time.
+  const last = scope ? null : await lastEncounter(db, patientId);
   const cutoff = opts.cutoff ?? (last ? defaultCutoff(last) : new Date());
   const recon = buildReconciliation(rows, cutoff);
   const responder = opts.responder ?? defaultResponder();
@@ -59,6 +60,8 @@ export async function runReconciliation(
         aiRaw: s.response.raw,
         aiError: s.checked.error,
         summary,
+        incomingPatientId: scope?.incomingPatientId ?? null,
+        currentSourceRecordId: scope?.currentSourceRecordId ?? null,
       },
     });
     await tx.reconciliationItem.createMany({
@@ -97,6 +100,19 @@ export async function runReconciliation(
         source: RECONCILE_SOURCE,
         details: { rows: rows.length, runId: created.id },
       },
+      ...(scope
+        ? [
+            {
+              actor,
+              action: "READ" as const,
+              patientId: scope.incomingPatientId,
+              entityType: "Patient",
+              entityId: scope.incomingPatientId,
+              source: RECONCILE_SOURCE,
+              details: { role: "incoming", runId: created.id },
+            },
+          ]
+        : []),
       {
         actor,
         action: "CREATE",

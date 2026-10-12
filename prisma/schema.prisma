@@ -58,6 +58,8 @@ enum AuditAction {
   UPDATE
   DELETE
   EXPORT
+  /// A SMART on FHIR launch completed (Phase 5).
+  LOGIN
 }
 
 /// Patient index. Demographics are a convenience copy; the canonical Patient resource is the source of truth.
@@ -75,7 +77,9 @@ model Patient {
   canonicalResources CanonicalResource[]
   mappingIssues      MappingIssue[]
   transferJobs       TransferJob[]
-  reconciliationRuns ReconciliationRun[]
+  reconciliationRuns ReconciliationRun[] @relation("RunPatient")
+  incomingRuns       ReconciliationRun[] @relation("RunIncomingPatient")
+  smartSessions      SmartSession[]
 
   @@unique([sourceSystem, sourcePatientId])
   @@map("patients")
@@ -103,6 +107,8 @@ model SourceRecord {
   patient            Patient?            @relation(fields: [patientId], references: [id])
   canonicalResources CanonicalResource[]
   mappingIssues      MappingIssue[]
+  reconciliationRuns ReconciliationRun[]
+  smartSessions      SmartSession[]
 
   @@index([patientId])
   @@map("source_records")
@@ -287,9 +293,15 @@ model ReconciliationRun {
   aiError       String?  @map("ai_error")
   /// Counts only: items by category and match, flags by code, claims valid and dropped.
   summary       Json?
+  /// Phase 5 (SMART launch): the outside record's patient when it is not `patientId` (null: same patient).
+  incomingPatientId     String? @map("incoming_patient_id") @db.Uuid
+  /// Phase 5: the current chart is exactly this source record (the EHR read at launch), not the Bundle primaries.
+  currentSourceRecordId String? @map("current_source_record_id") @db.Uuid
 
-  patient   Patient                  @relation(fields: [patientId], references: [id])
-  items     ReconciliationItem[]
+  patient         Patient                  @relation("RunPatient", fields: [patientId], references: [id])
+  incomingPatient Patient?                 @relation("RunIncomingPatient", fields: [incomingPatientId], references: [id])
+  currentSource   SourceRecord?            @relation(fields: [currentSourceRecordId], references: [id])
+  items           ReconciliationItem[]
   claims    ReconciliationClaim[]
   decisions ReconciliationDecision[]
 
@@ -363,4 +375,35 @@ model ReconciliationDecision {
 
   @@index([runId, decidedAt])
   @@map("reconciliation_decisions")
+}
+
+/// Phase 5: one SMART on FHIR launch (EHR or standalone). The browser cookie holds a random id; this row is keyed by
+/// its sha256. Tokens and the PKCE verifier exist only inside `state_enc` (AES-256-GCM with SESSION_SECRET).
+model SmartSession {
+  id             String    @id
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  expiresAt      DateTime  @map("expires_at")
+  /// "ehr" | "standalone"
+  launchType     String    @map("launch_type")
+  iss            String
+  /// fhirclient's storage (authorization state, code verifier, token response), encrypted. Never logged.
+  stateEnc       String?   @map("state_enc")
+  authorizedAt   DateTime? @map("authorized_at")
+  /// Granted scope as returned by the token endpoint.
+  scope          String?
+  fhirUser       String?   @map("fhir_user")
+  fhirPatientId  String?   @map("fhir_patient_id")
+  encounterId    String?   @map("encounter_id")
+  /// Local patient index row and source record created from the launch read.
+  patientId      String?   @map("patient_id") @db.Uuid
+  sourceRecordId String?   @map("source_record_id") @db.Uuid
+  /// Per-query counts and error classes from the launch read; no PHI.
+  fetchSummary   Json?     @map("fetch_summary")
+
+  patient      Patient?      @relation(fields: [patientId], references: [id])
+  sourceRecord SourceRecord? @relation(fields: [sourceRecordId], references: [id])
+
+  @@index([expiresAt])
+  @@map("smart_sessions")
 }

@@ -1,14 +1,28 @@
 // Loads a patient's reconcile rows: the Bundle primaries (current chart) and the C-CDA copies (incoming), mapped.
 import type { Db } from "@/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { RECONCILE_TYPES, type ReconcileType, type SourceRow } from "@/reconcile/rows";
 
-export async function loadSourceRows(db: Db, patientId: string): Promise<SourceRow[]> {
+/**
+ * Phase 5 (SMART launch): the current chart is exactly one source record (the EHR read at launch) and the incoming
+ * record is another patient index row's C-CDA (the outside record the provider picked).
+ */
+export type RowScope = { currentSourceRecordId: string; incomingPatientId: string };
+
+export async function loadSourceRows(db: Db, patientId: string, scope?: RowScope): Promise<SourceRow[]> {
+  if (!scope) return queryRows(db, { patientId, sourceRecord: { format: { in: ["FHIR_BUNDLE", "CCDA"] } } });
+  const current = await queryRows(db, { patientId, sourceRecordId: scope.currentSourceRecordId, sourceRecord: { format: "FHIR_BUNDLE" } });
+  const incoming = await queryRows(db, { patientId: scope.incomingPatientId, sourceRecord: { format: "CCDA" } });
+  // One record is the whole current chart, so its rows are primaries whatever earlier launches they duplicate.
+  return [...current.map((r) => ({ ...r, duplicateOfId: null })), ...incoming];
+}
+
+async function queryRows(db: Db, where: Prisma.CanonicalResourceWhereInput): Promise<SourceRow[]> {
   const rows = await db.canonicalResource.findMany({
     where: {
-      patientId,
+      ...where,
       resourceType: { in: [...RECONCILE_TYPES] },
       mapped: { not: { equals: null } },
-      sourceRecord: { format: { in: ["FHIR_BUNDLE", "CCDA"] } },
     },
     orderBy: [{ resourceType: "asc" }, { fhirId: "asc" }, { id: "asc" }],
     select: {

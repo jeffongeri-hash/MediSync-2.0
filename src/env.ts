@@ -9,9 +9,12 @@ export const envSchema = z.object({
   DATABASE_URL: z.url().refine((v) => /^postgres(ql)?:\/\//.test(v), "must be a postgres URL"),
   ANTHROPIC_API_KEY: optional,
   ANTHROPIC_MODEL: optional,
+  // SMART on FHIR (Phase 5): parsed in full by src/smart/config.ts, only when a launch route needs them.
   SMART_CLIENT_ID: optional,
-  SMART_ISS: z.url().optional(),
-  SMART_REDIRECT_URI: z.url().optional(),
+  SMART_ISS: optional,
+  SMART_REDIRECT_URI: optional,
+  SMART_SCOPE: optional,
+  SESSION_SECRET: optional,
 });
 
 export type Env = z.infer<typeof envSchema>;
