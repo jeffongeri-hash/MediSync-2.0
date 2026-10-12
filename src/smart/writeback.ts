@@ -12,6 +12,8 @@ export type WriteItem = {
   id: string;
   ordinal: number;
   category: string;
+  /** SAME, CHANGED, NEW or CURRENT_ONLY (reconcile match kind). */
+  match: string;
   display: string;
   current: { resourceType: string; fhirId: string } | null;
   incoming: { resourceType: string; resource: Json } | null;
@@ -86,6 +88,8 @@ export function buildWritePackage(input: {
   for (const it of input.items) {
     const d = it.decision;
     if (!d || d.action === "REJECT") continue;
+    // Accepting a line that is the same on both sides changes nothing.
+    if (d.action === "ACCEPT" && it.match === "SAME") continue;
     const body = d.action === "EDIT" ? (d.editedResource as Json | null) : it.incoming?.resource;
     // Accepting a line with no incoming row confirms the current chart: nothing to write.
     if (!body || typeof body.resourceType !== "string") continue;
@@ -166,6 +170,7 @@ export async function loadWriteItems(db: Db, runId: string): Promise<WriteItem[]
       id: it.id,
       ordinal: it.ordinal,
       category: it.category,
+      match: it.match,
       display: row?.display ?? "",
       current: it.currentRow
         ? { resourceType: it.currentRow.resourceType, fhirId: it.currentRow.fhirId }

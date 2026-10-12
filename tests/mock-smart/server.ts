@@ -43,7 +43,13 @@ export type MockSmart = {
   close(): Promise<void>;
 };
 
-/** Literal "Type/id" references (as a FHIR server serves them); conditional ones keep only their display. */
+/** The mock EHR's own id for a Synthea id: an EHR never shares the outside record's ids. */
+export const mockId = (id: string) => `mock-${id}`;
+
+/**
+ * Serves a Synthea patient the way an EHR would: its own ids (mockId), literal "Type/id" references, and conditional
+ * references (Synthea's Practitioner/Organization lookups) reduced to their display.
+ */
 export function loadSyntheaPatient(file: string): { patientId: string; resources: Resource[] } {
   const bundle = JSON.parse(readFileSync(file, "utf8")) as {
     entry: { fullUrl?: string; resource: Resource }[];
@@ -51,14 +57,18 @@ export function loadSyntheaPatient(file: string): { patientId: string; resources
   const index = new Map<string, string>();
   for (const e of bundle.entry)
     if (e.fullUrl) index.set(e.fullUrl, `${e.resource.resourceType}/${e.resource.id}`);
+  const literal = (ref: string) => {
+    const [type, id] = ref.split("/");
+    return `${type}/${mockId(id!)}`;
+  };
   const fix = (node: unknown): unknown => {
     if (Array.isArray(node)) return node.map(fix);
     if (typeof node !== "object" || node === null) return node;
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(node)) {
       if (k === "reference" && typeof v === "string") {
-        if (index.has(v)) out[k] = index.get(v);
-        else if (!v.includes("?")) out[k] = v;
+        if (index.has(v)) out[k] = literal(index.get(v)!);
+        else if (/^[A-Za-z]+\/[^/?]+$/.test(v)) out[k] = literal(v);
       } else out[k] = fix(v);
     }
     return out;
@@ -66,7 +76,7 @@ export function loadSyntheaPatient(file: string): { patientId: string; resources
   const resources = bundle.entry
     .map((e) => e.resource)
     .filter((r) => MOCK_TYPES.includes(r.resourceType))
-    .map((r) => fix(r) as Resource);
+    .map((r) => ({ ...(fix(r) as Resource), id: mockId(r.id) }));
   const patient = resources.find((r) => r.resourceType === "Patient");
   if (!patient) throw new Error(`No Patient in ${file}`);
   return { patientId: patient.id, resources };

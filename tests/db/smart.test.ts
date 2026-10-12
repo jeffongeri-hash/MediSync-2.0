@@ -8,7 +8,7 @@ import { runReconciliation } from "@/reconcile/run";
 import { smartConfig, type SmartConfig } from "@/smart/config";
 import { beginLaunch, completeLaunch, LaunchError } from "@/smart/launch";
 import { SESSION_COOKIE } from "@/smart/session";
-import { MOCK_PRACTITIONER, startMockSmart, type MockSmart } from "../mock-smart/server";
+import { MOCK_PRACTITIONER, mockId, startMockSmart, type MockSmart } from "../mock-smart/server";
 
 // Phase 5: EHR and standalone SMART launches against the test-only mock server (synthetic Synthea data), through
 // fhirclient's real authorize/ready code: PKCE, state, token exchange, launch context, record read, ingest, audit.
@@ -35,14 +35,14 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
   let mock: MockSmart;
   let cfg: SmartConfig;
 
-  const launchToken = async (patient = GONZALO) => {
+  const launchToken = async (patient = mockId(GONZALO)) => {
     const res = await fetch(mock.ehrLaunchUrl(`${APP}/smart/launch`, patient), {
       redirect: "manual",
     });
     const to = new URL(res.headers.get("location")!);
     return { iss: to.searchParams.get("iss")!, launch: to.searchParams.get("launch")! };
   };
-  const ehrLaunch = async (patient = GONZALO) => {
+  const ehrLaunch = async (patient = mockId(GONZALO)) => {
     const { iss, launch } = await launchToken(patient);
     const begun = await beginLaunch(db, cfg, { kind: "ehr", iss, launch, secure: false });
     const callback = await authorizeAt(begun.location);
@@ -111,7 +111,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     const s = await completeLaunch(db, cfg, { url: callback, token });
     expect(s).toMatchObject({
       launchType: "ehr",
-      fhirPatientId: GONZALO,
+      fhirPatientId: mockId(GONZALO),
       fhirUser: MOCK_PRACTITIONER,
       stateEnc: null,
     });
@@ -134,7 +134,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     const patient = await db.patient.findUniqueOrThrow({ where: { id: s.patientId! } });
     expect(patient).toMatchObject({
       sourceSystem: "smart:127.0.0.1:4011",
-      sourcePatientId: GONZALO,
+      sourcePatientId: mockId(GONZALO),
     });
     // Paging was followed (page size 5), and every FHIR call carried the bearer token.
     expect(mock.requests.filter((r) => r.path === "/fhir/Condition").length).toBeGreaterThan(3);
@@ -191,7 +191,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     });
     expect(s).toMatchObject({
       launchType: "standalone",
-      fhirPatientId: GONZALO,
+      fhirPatientId: mockId(GONZALO),
       encounterId: null,
     });
   }, 60_000);
@@ -246,7 +246,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     });
     try {
       const c2 = { ...cfg, issAllowlist: [failing.iss] };
-      const res = await fetch(failing.ehrLaunchUrl(`${APP}/smart/launch`, ERIK), {
+      const res = await fetch(failing.ehrLaunchUrl(`${APP}/smart/launch`, mockId(ERIK)), {
         redirect: "manual",
       });
       const to = new URL(res.headers.get("location")!);
@@ -268,7 +268,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
         error: "http_500",
       });
       expect(queries.find((q) => q.label === "MedicationRequest")).toMatchObject({ ok: true });
-      expect(s.fhirPatientId).toBe(ERIK);
+      expect(s.fhirPatientId).toBe(mockId(ERIK));
     } finally {
       await failing.close();
     }

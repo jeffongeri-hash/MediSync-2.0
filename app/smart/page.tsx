@@ -54,14 +54,14 @@ export default async function SmartPage({
   const patient = ready
     ? await db.patient.findUnique({
         where: { id: ready.patientId! },
-        select: { id: true, displayName: true },
+        select: { id: true, displayName: true, birthDate: true },
       })
     : null;
   const outside = ready
     ? await db.patient.findMany({
         where: { sourceSystem: SYNTHEA_SOURCE, sourceRecords: { some: { format: "CCDA" } } },
         orderBy: { displayName: "asc" },
-        select: { id: true, displayName: true, sourcePatientId: true },
+        select: { id: true, displayName: true, birthDate: true },
       })
     : [];
   const latestRun = ready
@@ -86,11 +86,12 @@ export default async function SmartPage({
     queries?: QueryOutcome[];
     capability?: CapabilitySummary | null;
   };
-  // Pre-select the outside record of the same synthetic person when the launch server serves Synthea ids.
-  const suggested =
-    latestRun?.incomingPatientId ??
-    outside.find((o) => o.sourcePatientId === ready?.fhirPatientId)?.id ??
-    "";
+  // Suggest the outside record with the same name and birth date (a demo heuristic, not patient matching).
+  const samePerson = (o: (typeof outside)[number]) =>
+    !!patient?.displayName &&
+    o.displayName === patient.displayName &&
+    o.birthDate?.getTime() === patient.birthDate?.getTime();
+  const suggested = latestRun?.incomingPatientId ?? outside.find(samePerson)?.id ?? "";
 
   return (
     <main className="page">
@@ -169,7 +170,8 @@ export default async function SmartPage({
                 </option>
                 {outside.map((o) => (
                   <option key={o.id} value={o.id}>
-                    {o.displayName ?? o.id} (C-CDA)
+                    {o.displayName ?? o.id} (C-CDA
+                    {samePerson(o) ? ", same name and birth date" : ""})
                   </option>
                 ))}
               </select>

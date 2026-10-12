@@ -33,6 +33,7 @@ const item = (over: Partial<WriteItem>): WriteItem => ({
   id: "i1",
   ordinal: 0,
   category: "ALLERGY",
+  match: "NEW",
   display: "Peanut",
   current: null,
   incoming: { resourceType: "AllergyIntolerance", resource: allergy },
@@ -89,6 +90,11 @@ describe("buildWritePackage (dry run)", () => {
           incoming: { resourceType: "Condition", resource: condition },
         }),
         item({ id: "rej", decision: { action: "REJECT", editedResource: null } }),
+        item({
+          id: "same",
+          match: "SAME",
+          current: { resourceType: "AllergyIntolerance", fhirId: "ehr-a" },
+        }),
         item({ id: "none", decision: null }),
         item({
           id: "confirm",
