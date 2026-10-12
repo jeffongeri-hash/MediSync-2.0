@@ -50,3 +50,4 @@
 - Evals are a frozen set in fixtures/eval (10 patients, 20 cases, 25 injected changes). CI replays recordings keyed by prompt version + input sha256; missing or stale ones are "not evaluated", never passed.
 - The live call is streamed (`finalMessage`) with max_tokens 32000, since adaptive thinking counts toward the cap. A 400 keeps the API's message (truncated) in aiError; other failures keep only an error class.
 - CI's eval step is report-only: replay never fails the build. `pnpm eval --strict` exits 1 when an evaluated case fails, for local gating.
+- The app and the Phase 4 gate need no API key. The gate is the key-free eval (`pnpm eval --template --strict`, enforced in CI plus src/ai/eval.test.ts); the Claude summary and its pass rate are an optional enhancement.

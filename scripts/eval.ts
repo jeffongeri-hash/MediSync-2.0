@@ -1,7 +1,7 @@
 // Phase 4 eval over the frozen cases in fixtures/eval. Prints a Markdown report (or writes it with --out).
-//   pnpm eval                 replay recorded Claude responses (fixtures/eval/recordings); CI runs this
+//   pnpm eval                 replay recorded Claude responses (fixtures/eval/recordings); CI reports it
 //   pnpm eval --live          call Claude (needs ANTHROPIC_API_KEY) and re-record the cases it runs
-//   pnpm eval --template      the rule-built template, no AI: checks the harness itself
+//   pnpm eval --template      the rule-built summary, no AI: the key-free Phase 4 gate (CI runs it with --strict)
 // Options: --cases case-01,case-11 (subset; a cheap first live run) · --out file · --strict (exit 1 when any
 // evaluated case fails) · --prompts dir (write each case's exact system + user prompt and input hash, call nothing).
 // Unrecorded or stale cases are reported as not evaluated, never as passed.

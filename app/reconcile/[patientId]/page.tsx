@@ -33,7 +33,7 @@ const TOPIC_LABEL: Record<string, string> = {
 const RESPONDER_LABEL: Record<string, string> = {
   anthropic: "Claude",
   replay: "Recorded Claude response",
-  template: "Template (no AI: no API key configured)",
+  template: "Rule-built summary (no API key configured; the Claude summary is optional)",
 };
 
 const when = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC";

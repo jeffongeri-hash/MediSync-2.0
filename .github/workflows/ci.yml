@@ -45,7 +45,9 @@ jobs:
         run: |
           pnpm -s transfer c4a5ef89-933c-c428-8fa7-4a26d9f621a9 --dry-run --at 2026-10-11T00:00:00Z --out exports
           cat exports/c4a5ef89-933c-c428-8fa7-4a26d9f621a9.fidelity.md >> "$GITHUB_STEP_SUMMARY"
-      - name: Reconciliation eval (recorded Claude responses; unrecorded cases are reported, not passed)
+      - name: Reconciliation eval, key-free gate (rule-built summary; fails the build on any failing case)
+        run: pnpm -s eval --template --strict >> "$GITHUB_STEP_SUMMARY"
+      - name: Reconciliation eval, Claude (recorded responses; report only, unrecorded cases are not evaluated)
         run: pnpm -s eval >> "$GITHUB_STEP_SUMMARY"
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium

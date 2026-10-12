@@ -12,8 +12,8 @@ test("run a reconciliation, review the cited summary, accept a line and save an 
 
   await expect(page.getByRole("heading", { level: 1, name: PATIENT })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Summary" })).toBeVisible();
-  // Without an API key the summary comes from the template, and says so.
-  await expect(page.getByText(/Template \(no AI|Claude/).first()).toBeVisible();
+  // Without an API key the summary is rule-built, and says so.
+  await expect(page.getByText(/Rule-built summary|Claude/).first()).toBeVisible();
   for (const name of ["Problems", "Medications", "Allergies"])
     await expect(page.getByRole("heading", { level: 2, name })).toBeVisible();
   const firstCite = page.locator(".claim .cite").first();
