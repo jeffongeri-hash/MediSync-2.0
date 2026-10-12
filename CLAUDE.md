@@ -35,6 +35,7 @@ Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient
 - `pnpm map [--all]` (mapping + dedupe pass; db:seed runs it) · `pnpm mapping:report [out.md]` (coverage report)
 - `pnpm transfer <patient> [--dry-run] [--out dir] [--report file] [--at instant]` (US Core bundle + fidelity report; `exports/` is gitignored) · API: `POST /api/transfer`, `GET /api/transfer/:id`
 - `pnpm eval` (replay recorded Claude answers) · `--live` (needs ANTHROPIC_API_KEY; re-records) · `--template` (no AI) · `--cases a,b` · `--prompts dir` (dump prompts, send nothing) · `--strict` · `--out file` · `pnpm eval:build` (rebuild fixtures/eval from the DB)
+- SMART (Phase 5): `/smart/launch` (EHR launch), `/smart/login` (standalone), `/smart/callback`, `/smart` · `pnpm mock:smart` (test-only mock server, iss http://127.0.0.1:4010/fhir) · `pnpm smart:capability [iss] [--out f] [--raw f]` (write-back report from `{iss}/metadata`) · Epic runbook: docs/EPIC_SANDBOX.md
 
 ## Conventions
 - Canonical internal model = FHIR R4 resources validated with Zod. All sources map INTO it; all exports map OUT of it.

@@ -82,3 +82,20 @@ build container's network policy. Re-check when those hosts are reachable, and n
   The seeded data has no therapeutic duplication or allergy-medication conflict among active rows; the eval injects them.
 - Phase 3 gaps, now surfaced by reconcile: C-CDA allergy onset and reaction severity show as `adds_detail` on the paired line,
   and C-CDA MedicationStatements are compared with their Bundle MedicationRequest on status, start, end and dose. Still not merged.
+
+## SMART launch (Phase 5, 2026-10-12)
+- Still blocked from the build container: every fhir.epic.com path tried (`/metadata`, `/.well-known/smart-configuration`,
+  `/oauth2/authorize`, `/oauth2/token` under interconnect-fhir-oauth) fails with proxy CONNECT 403; hl7.org and build.fhir.org
+  also 403, so SMART App Launch v2 rules were not re-checked. SMART_CLIENT_ID is not set. Node's fetch here does not use
+  HTTPS_PROXY (ENOTFOUND), so `pnpm smart:capability` must run where fhir.epic.com resolves.
+- Epic write-back: NOT yet documented from Epic's CapabilityStatement. Pending the manual run in docs/EPIC_SANDBOX.md, which
+  writes docs/reports/phase5-writeback.md (+ raw JSON). The secondary-source guesses above stay unverified.
+- fhirclient 3.0.0: entry points `browser`, `node` (Node req/res) and `hapi` only; `types/types.d.ts` is missing from the
+  package, so its public types resolve to `any` (skipLibCheck). `ready()` takes `state` from the URL and looks it up in the
+  storage we give it, so binding a launch to the browser comes from the per-cookie storage.
+- From memory, unverified against Epic: scope style (SMART v1 `.read` assumed; Epic may grant per its app registration
+  regardless), whether Condition search needs `category`, that S256 is listed in `code_challenge_methods_supported`, the
+  format of the id_token `fhirUser` claim, that a `http://localhost` redirect URI is accepted for non-production clients,
+  and whether the sandbox launches the app in a cross-site iframe (a SameSite=Lax cookie would then not reach the callback).
+- Verified only against the test mock (tests/mock-smart): EHR + standalone launch, PKCE, state binding, paging, partial
+  read failure, the reconcile flow inside the launch and the dry-run write-back (tests/db/smart.test.ts, tests/e2e/smart.spec.ts).
