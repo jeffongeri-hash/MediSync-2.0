@@ -15,7 +15,13 @@ import {
   type LaunchKind,
   type SmartConfig,
 } from "@/smart/config";
-import { readPatientRecord, RecordReadError, type FhirGet, type QueryOutcome } from "@/smart/fetch";
+import {
+  isFhirId,
+  readPatientRecord,
+  RecordReadError,
+  type FhirGet,
+  type QueryOutcome,
+} from "@/smart/fetch";
 import {
   createSession,
   findSession,
@@ -47,8 +53,6 @@ export const LAUNCH_ERRORS: Record<string, string> = {
 
 export const actorOf = (s: Pick<SmartSession, "fhirUser">) =>
   `smart:${s.fhirUser ?? "unknown-user"}`;
-
-const FHIR_ID = /^[A-Za-z0-9\-.]{1,64}$/;
 
 export async function beginLaunch(
   db: Db,
@@ -122,7 +126,7 @@ export async function completeLaunch(
   if (normalizeIss(state.serverUrl ?? "") !== session.iss) throw new LaunchError("state_mismatch");
 
   const fhirPatientId = client.getPatientId();
-  if (!fhirPatientId || !FHIR_ID.test(fhirPatientId)) throw new LaunchError("no_patient");
+  if (!fhirPatientId || !isFhirId(fhirPatientId)) throw new LaunchError("no_patient");
   const fhirUser = client.getFhirUser() ?? null;
   const encounterId = client.getEncounterId() ?? null;
   const grantedScope =

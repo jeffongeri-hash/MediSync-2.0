@@ -130,6 +130,9 @@ async function search(
   }
 }
 
+/** A FHIR id (R4 id datatype) that is not a dot segment, so it is safe to put in a request path. */
+export const isFhirId = (id: string) => /^[A-Za-z0-9\-.]{1,64}$/.test(id) && !/^\.+$/.test(id);
+
 /** "Medication/x" ids referenced by MedicationRequests (relative or absolute on this server) that were not returned. */
 export function missingMedications(resources: Resource[], iss: string): string[] {
   const have = new Set(resources.filter((r) => r.resourceType === "Medication").map((r) => r.id));
@@ -139,8 +142,8 @@ export function missingMedications(resources: Resource[], iss: string): string[]
     const ref = (r.medicationReference as { reference?: unknown } | undefined)?.reference;
     if (typeof ref !== "string" || ref.startsWith("#")) continue;
     const rel = ref.startsWith(`${iss}/`) ? ref.slice(iss.length + 1) : ref;
-    const m = /^Medication\/([A-Za-z0-9\-.]{1,64})$/.exec(rel);
-    if (m && !have.has(m[1])) ids.add(m[1]!);
+    const id = rel.startsWith("Medication/") ? rel.slice("Medication/".length) : "";
+    if (isFhirId(id) && !have.has(id)) ids.add(id);
   }
   return [...ids].sort();
 }
