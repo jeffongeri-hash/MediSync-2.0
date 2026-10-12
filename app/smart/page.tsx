@@ -5,6 +5,7 @@ import { getDb } from "@/db";
 import { SYNTHEA_SOURCE } from "@/ingest/seed";
 import { RECONCILE_SOURCE } from "@/reconcile/run";
 import { RECONCILE_WRITE_TYPES, supports, type CapabilitySummary } from "@/smart/capability";
+import { serverLabel, smartServers, type SmartServer } from "@/smart/config";
 import type { QueryOutcome } from "@/smart/fetch";
 import { actorOf, LAUNCH_ERRORS } from "@/smart/launch";
 import { currentSession } from "@/smart/next";
@@ -21,6 +22,13 @@ const ERRORS: Record<string, string> = {
 
 const when = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
 function NotLaunched() {
+  // Settings are optional for the rest of the app; without them there is nothing to launch.
+  let servers: SmartServer[] = [];
+  try {
+    servers = smartServers();
+  } catch {
+    servers = [];
+  }
   return (
     <>
       <p>
@@ -28,14 +36,23 @@ function NotLaunched() {
         (EHR launch), or start a standalone launch below and choose a test patient at the EHR&apos;s
         sign-in.
       </p>
-      <p>
-        <a className="button" href="/smart/login">
-          Standalone launch
-        </a>
-      </p>
+      {servers.length ? (
+        <ul className="pick pick-list" aria-label="Standalone launch">
+          {servers.map((s) => (
+            <li key={s.name}>
+              <a className="button" href={`/smart/login?server=${encodeURIComponent(s.name)}`}>
+                Standalone launch: {serverLabel(s.iss)} ({s.name})
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="notice">{LAUNCH_ERRORS.config}</p>
+      )}
       <p className="fine">
         EHR launch URL: <span className="mono">/smart/launch</span> · redirect URI:{" "}
-        <span className="mono">/smart/callback</span>. Setup steps: docs/EPIC_SANDBOX.md.
+        <span className="mono">/smart/callback</span>. Setup steps: docs/EPIC_SANDBOX.md,
+        docs/ORACLE_SANDBOX.md.
       </p>
     </>
   );

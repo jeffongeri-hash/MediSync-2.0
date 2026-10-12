@@ -551,6 +551,11 @@ button.button {
   gap: 0.6rem;
   align-items: center;
 }
+.pick-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
 .pick select {
   font: inherit;
   max-width: 100%;

@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-// Phase 5 in a browser, against the test-only mock SMART server (synthetic Synthea data; not the Epic sandbox):
-// EHR launch -> authorize -> callback -> read -> reconcile in the launch -> accept -> dry-run write-back; standalone
-// launch; and the refusals a browser can see.
+// Phase 5 in a browser, against two test-only mock SMART servers standing in for two EHRs (synthetic Synthea data;
+// not the Epic or Oracle Health sandbox): EHR launch -> authorize -> callback -> read -> reconcile in the launch ->
+// accept -> dry-run write-back; EHR and standalone launch on the second server; and the refusals a browser can see.
 const MOCK = `http://127.0.0.1:${process.env.E2E_MOCK_SMART_PORT ?? 4010}`;
+const MOCK_B = `http://127.0.0.1:${process.env.E2E_MOCK_SMART_PORT_B ?? 4020}`;
 const PATIENT = "Gonzalo160 Wilford267 Hermiston71";
 const USER = "Practitioner/mock-practitioner-1";
 
@@ -68,17 +69,40 @@ test.describe.serial("SMART launch (mock server)", () => {
     await fresh.close();
   });
 
-  test("standalone launch picks the patient at the server and has no encounter context", async ({
+  test("standalone launch on each server picks the patient there and has no encounter context", async ({
     browser,
+  }) => {
+    for (const [name, base] of [
+      ["mocka", MOCK],
+      ["mockb", MOCK_B],
+    ]) {
+      const fresh = await browser.newContext();
+      const page = await fresh.newPage();
+      await page.goto("/smart");
+      await page
+        .getByRole("link", { name: new RegExp(`^Standalone launch: .*\\(${name}\\)$`) })
+        .click();
+      await expect(page).toHaveURL(/\/smart$/);
+      const banner = page.getByRole("complementary", { name: "Launch context" });
+      await expect(banner).toContainText("Standalone launch");
+      await expect(banner).toContainText(`${base}/fhir`);
+      await expect(banner).not.toContainText("Encounter/");
+      await fresh.close();
+    }
+  });
+
+  test("EHR launch from the second server uses that server's registration", async ({
+    browser,
+    baseURL,
   }) => {
     const fresh = await browser.newContext();
     const page = await fresh.newPage();
-    await page.goto("/smart");
-    await page.getByRole("link", { name: "Standalone launch" }).click();
+    await page.goto(`${MOCK_B}/ehr/launch?app=${encodeURIComponent(`${baseURL}/smart/launch`)}`);
     await expect(page).toHaveURL(/\/smart$/);
     const banner = page.getByRole("complementary", { name: "Launch context" });
-    await expect(banner).toContainText("Standalone launch");
-    await expect(banner).not.toContainText("Encounter/");
+    await expect(banner).toContainText("EHR launch");
+    await expect(banner).toContainText(`${MOCK_B}/fhir`);
+    await expect(page.getByRole("heading", { level: 1, name: PATIENT })).toBeVisible();
     await fresh.close();
   });
 

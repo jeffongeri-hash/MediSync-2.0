@@ -1,4 +1,5 @@
 // Launch context shown on every page reached through a SMART launch: which server, which user, which patient.
+import { serverLabel } from "@/smart/config";
 import type { SmartSession } from "@/smart/session";
 
 const when = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
@@ -8,7 +9,9 @@ export function LaunchBanner({ session, name }: { session: SmartSession; name: s
     <aside className="launch-banner" aria-label="Launch context">
       <dl>
         <dt>Launched from</dt>
-        <dd className="mono">{session.iss}</dd>
+        <dd>
+          {serverLabel(session.iss)} <span className="mono subtle">{session.iss}</span>
+        </dd>
         <dt>Launch</dt>
         <dd>
           {session.launchType === "ehr" ? "EHR launch" : "Standalone launch"} ·{" "}
