@@ -8,7 +8,10 @@ import { resolvePatient } from "@/export/run";
 import { seedSynthea } from "@/ingest/seed";
 import { runMapping } from "@/mapping/run";
 import { runReconciliation } from "@/reconcile/run";
+import { sha256 } from "@/ingest/source-summary";
 import { accessFor, DEMO_ACTOR } from "@/security/access";
+import { dataKeys, keyIdOf, openText, rawTextAad } from "@/security/crypt";
+import { rotateSealed } from "@/security/rotate";
 import { grantRole, revokeRole, roleOf } from "@/security/roles";
 import { createSession, SESSION_COOKIE } from "@/smart/session";
 import { POST as transferPost } from "../../app/api/transfer/route";
@@ -51,6 +54,7 @@ describe.skipIf(!process.env.DATABASE_URL)("roles and access (database)", () => 
   const cleanup = async () => {
     await db.smartSession.deleteMany({ where: { iss: ISS } });
     await db.userRole.deleteMany({ where: { actor: { startsWith: `smart:${ISS}` } } });
+    await db.sourceRecord.deleteMany({ where: { sourceSystem: "test-rotate" } });
   };
 
   beforeAll(async () => {
@@ -158,4 +162,32 @@ describe.skipIf(!process.env.DATABASE_URL)("roles and access (database)", () => 
     expect((await get(await session(PRACTITIONER, a))).status).toBe(200);
     expect((await get(await session(PRACTITIONER, b))).status).toBe(404);
   });
+
+  it.skipIf(!dataKeys())(
+    "seals plaintext rows with crypt:rotate and leaves sealed rows alone",
+    async () => {
+      const text = `{"resourceType":"Bundle","id":"rotate-${Date.now()}","type":"collection"}`;
+      const row = await db.sourceRecord.create({
+        data: {
+          format: "FHIR_BUNDLE",
+          sourceSystem: "test-rotate",
+          filename: "rotate.json",
+          contentType: "application/fhir+json",
+          rawText: text,
+          sha256: sha256(text),
+          byteSize: Buffer.byteLength(text),
+        },
+        select: { id: true, sha256: true },
+      });
+      expect((await rotateSealed(db)).sourceRecords).toBeGreaterThanOrEqual(1);
+      const stored = await db.sourceRecord.findUniqueOrThrow({
+        where: { id: row.id },
+        select: { rawText: true },
+      });
+      expect(keyIdOf(stored.rawText)).toBe(dataKeys()!.current);
+      expect(stored.rawText).not.toContain("rotate-");
+      expect(openText(stored.rawText, rawTextAad(row.sha256))).toBe(text);
+      expect((await rotateSealed(db)).sourceRecords).toBe(0);
+    },
+  );
 });

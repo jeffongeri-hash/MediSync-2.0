@@ -8,6 +8,7 @@ import { replaceIssues } from "@/mapping/run";
 import { renderFidelityReport, summarize, type OpenIssueCount } from "@/export/report";
 import { planTransfer, type ExportRow } from "@/export/transfer";
 import { TARGET_PROFILE } from "@/export/us-core";
+import { bundleAad, sealText } from "@/security/crypt";
 
 const SOURCE_SELECT = { select: { format: true, sourceSystem: true, sha256: true } } as const;
 
@@ -239,7 +240,10 @@ export async function runTransfer(
               blockers: plan.blockers.length,
             },
             report: result.report,
-            bundle: result.bundleText,
+            bundle:
+              result.bundleText && result.bundleSha256
+                ? sealText(result.bundleText, bundleAad(result.bundleSha256))
+                : null,
             bundleSha256: result.bundleSha256,
             bundleBytes: result.bundleText ? Buffer.byteLength(result.bundleText) : null,
             error: result.error,

@@ -2,6 +2,7 @@ import type { Db } from "@/db";
 import { recordAudit } from "@/audit";
 import { SYNTHEA_SOURCE } from "@/ingest/seed";
 import type { CcdaSummary, FhirBundleSummary } from "@/ingest/source-summary";
+import { openText, rawTextAad } from "@/security/crypt";
 
 const PREVIEW_CHARS = 900;
 
@@ -27,7 +28,15 @@ export async function getDemoData(db: Db, actor: string) {
         sourcePatientId: true,
         sourceRecords: {
           orderBy: { format: "desc" },
-          select: { id: true, format: true, filename: true, byteSize: true, sha256: true, receivedAt: true, summary: true },
+          select: {
+            id: true,
+            format: true,
+            filename: true,
+            byteSize: true,
+            sha256: true,
+            receivedAt: true,
+            summary: true,
+          },
         },
       },
     }),
@@ -36,19 +45,31 @@ export async function getDemoData(db: Db, actor: string) {
       orderBy: { filename: "asc" },
       select: { id: true, filename: true, byteSize: true, sha256: true, summary: true },
     }),
-    // Preview only; full raw documents can be several MB each.
-    db.$queryRaw<{ id: string; preview: string }[]>`
-      SELECT id::text, left(raw_text, ${PREVIEW_CHARS}) AS preview FROM source_records WHERE patient_id IS NOT NULL`,
+    // raw_text is encrypted at rest, so the preview is cut after decrypting (shortcut: reads whole documents of a few
+    // MB each; store a separate sealed preview if /demo ever serves more than the seeded set).
+    db.sourceRecord.findMany({
+      where: { patientId: { not: null } },
+      select: { id: true, sha256: true, rawText: true },
+    }),
   ]);
 
   await recordAudit(
     db,
-    patients.map((p) => ({ actor, action: "READ" as const, patientId: p.id, entityType: "Patient", entityId: p.id, source: "demo" })),
+    patients.map((p) => ({
+      actor,
+      action: "READ" as const,
+      patientId: p.id,
+      entityType: "Patient",
+      entityId: p.id,
+      source: "demo",
+    })),
   );
 
   // Read after logging so the page shows its own READ entries.
   const recentAudit = await db.auditLog.findMany({ orderBy: { id: "desc" }, take: 12 });
-  const previewById = new Map(previews.map((r) => [r.id, r.preview]));
+  const previewById = new Map(
+    previews.map((r) => [r.id, openText(r.rawText, rawTextAad(r.sha256)).slice(0, PREVIEW_CHARS)]),
+  );
   const [patientCount, sourceRecordCount, canonicalCount, openIssueCount, auditCount] = counts;
 
   return {

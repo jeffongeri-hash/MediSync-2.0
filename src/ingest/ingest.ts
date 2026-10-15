@@ -8,6 +8,7 @@ import { parseCcda } from "@/ingest/parse-ccda";
 import { parseFhirBundle, parseNdjson, type ParsedResource, type ParseResult } from "@/ingest/parse-fhir";
 import type { ReferenceIndex } from "@/ingest/references";
 import { sha256 } from "@/ingest/source-summary";
+import { rawTextAad, sealText } from "@/security/crypt";
 
 /** Bump when parser output changes in a way that matters for already-parsed sources. */
 export const PARSER_VERSION = "phase2.0";
@@ -105,7 +106,7 @@ export async function ingestSource(db: Db, input: SourceInput, actor: string): P
             sourceRecordId: input.sourceRecordId ?? null,
             filename: input.filename,
             contentType: input.contentType,
-            rawText,
+            rawText: sealText(rawText, rawTextAad(hash)),
             sha256: hash,
             byteSize: input.bytes.length,
             summary: (input.summary ?? {}) as Prisma.InputJsonValue,

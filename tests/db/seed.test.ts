@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { createDb } from "@/db";
 import { SYNTHEA_SOURCE, seedSynthea } from "@/ingest/seed";
 import { sha256 } from "@/ingest/source-summary";
+import { dataKeys, keyIdOf, openText, rawTextAad } from "@/security/crypt";
 
 const fixtures = join(process.cwd(), "fixtures/synthea");
 
@@ -27,25 +28,36 @@ describe.skipIf(!process.env.DATABASE_URL)("seedSynthea (database)", () => {
     }
   });
 
-  it("stores raw sources byte-for-byte", async () => {
+  it("stores raw sources byte-for-byte (sealed at rest when DATA_KEYS is set)", async () => {
     const file = readdirSync(join(fixtures, "fhir")).find((f) => f.endsWith(".json"))!;
     const bytes = readFileSync(join(fixtures, "fhir", file));
     const record = await db.sourceRecord.findUniqueOrThrow({ where: { sha256: sha256(bytes) } });
-    expect(Buffer.from(record.rawText, "utf8").equals(bytes)).toBe(true);
+    if (dataKeys()) expect(keyIdOf(record.rawText)).toBe(dataKeys()!.current);
+    const raw = openText(record.rawText, rawTextAad(record.sha256));
+    expect(Buffer.from(raw, "utf8").equals(bytes)).toBe(true);
     expect(record.byteSize).toBe(bytes.length);
   });
 
   it("audits every created patient and source record", async () => {
-    const patients = await db.patient.findMany({ where: { sourceSystem: SYNTHEA_SOURCE }, select: { id: true } });
+    const patients = await db.patient.findMany({
+      where: { sourceSystem: SYNTHEA_SOURCE },
+      select: { id: true },
+    });
     const audited = await db.auditLog.findMany({
-      where: { action: "CREATE", entityType: "Patient", entityId: { in: patients.map((p) => p.id) } },
+      where: {
+        action: "CREATE",
+        entityType: "Patient",
+        entityId: { in: patients.map((p) => p.id) },
+      },
     });
     expect(new Set(audited.map((a) => a.entityId)).size).toBe(10);
   });
 
   it("keeps audit_log append-only", async () => {
     const entry = await db.auditLog.findFirstOrThrow();
-    await expect(db.auditLog.update({ where: { id: entry.id }, data: { actor: "tampered" } })).rejects.toThrow();
+    await expect(
+      db.auditLog.update({ where: { id: entry.id }, data: { actor: "tampered" } }),
+    ).rejects.toThrow();
     await expect(db.auditLog.delete({ where: { id: entry.id } })).rejects.toThrow();
   });
 });

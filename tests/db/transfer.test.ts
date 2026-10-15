@@ -5,6 +5,7 @@ import { sha256, transactionBundleSchema } from "@/export/bundle";
 import { PatientNotFoundError, runTransfer } from "@/export/run";
 import { SYNTHEA_SOURCE, seedSynthea } from "@/ingest/seed";
 import { runMapping } from "@/mapping/run";
+import { bundleAad, openText } from "@/security/crypt";
 
 // Phase 3 gate: end-to-end transfer of one synthetic patient, plus job, audit and issue invariants.
 // Safe on a dev database: jobs and audit entries accumulate, EXPORT issues are replaced per run.
@@ -41,14 +42,15 @@ describe.skipIf(!process.env.DATABASE_URL)("transfer jobs (database)", () => {
       requestedBy: actor,
     });
     expect(job.finishedAt).not.toBeNull();
-    expect(job.bundle).toBe(r.bundleText);
-    expect(job.bundleSha256).toBe(sha256(job.bundle!));
-    expect(job.bundleBytes).toBe(Buffer.byteLength(job.bundle!));
+    const bundleText = openText(job.bundle!, bundleAad(job.bundleSha256!));
+    expect(bundleText).toBe(r.bundleText);
+    expect(job.bundleSha256).toBe(sha256(bundleText));
+    expect(job.bundleBytes).toBe(Buffer.byteLength(bundleText));
 
     const primaries = await db.canonicalResource.count({
       where: { patientId, duplicateOfId: null },
     });
-    const bundle = transactionBundleSchema.parse(JSON.parse(job.bundle!));
+    const bundle = transactionBundleSchema.parse(JSON.parse(bundleText));
     const types = bundle.entry.map((e) => e.resource.resourceType);
     expect(job.resourcesSelected).toBe(primaries);
     expect(job.resourcesExcluded).toBe(0);

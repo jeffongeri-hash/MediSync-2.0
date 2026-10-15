@@ -31,6 +31,8 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+      - name: Per-run data key (encryption at rest is exercised; never stored)
+        run: echo "DATA_KEYS=ci:$(openssl rand -base64 32)" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
