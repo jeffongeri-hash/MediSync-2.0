@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { z } from "zod";
+import { pageActor } from "@/access/session";
 import { recordAudit } from "@/audit";
 import { getDb } from "@/db";
 import type { ReconRow } from "@/reconcile/rows";
@@ -10,8 +11,6 @@ import { decide } from "../../../actions";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MediSync Reconcile · Edit" };
-
-const ACTOR = "demo:provider";
 
 // Edit = a provider-authored copy of the incoming row (or the current one when there is none), validated against the
 // canonical schema on save. The copy is stored on the decision; canonical rows are never written.
@@ -23,7 +22,8 @@ export default async function EditItemPage({
   searchParams: Promise<{ error?: string }>;
 }) {
   const { patientId, itemId } = await params;
-  const { error } = await searchParams;
+  const { error: errorParam } = await searchParams;
+  const error = errorParam && errorParam.length <= 200 ? errorParam : null;
   if (!z.uuid().safeParse(patientId).success || !z.uuid().safeParse(itemId).success) notFound();
   const db = getDb();
   const item = await db.reconciliationItem.findFirst({
@@ -37,8 +37,9 @@ export default async function EditItemPage({
     where: { itemId, action: "EDIT" },
     orderBy: { id: "desc" },
   });
+  const actor = (await pageActor("transfer.dryRun")).actor;
   await recordAudit(db, {
-    actor: ACTOR,
+    actor,
     action: "READ",
     patientId,
     entityType: source.resourceType,
@@ -64,7 +65,11 @@ export default async function EditItemPage({
           as ingested records. It is saved as your decision on this line, not written to the chart.
         </p>
       </header>
-      {error ? <p className="notice">{error}</p> : null}
+      {error ? (
+        <p className="notice" role="alert">
+          {error}
+        </p>
+      ) : null}
       <form action={decide}>
         <input type="hidden" name="patientId" value={patientId} />
         <input type="hidden" name="runId" value={item.run.id} />

@@ -6,8 +6,16 @@ import { PHASE1_COLUMNS, ageOn, formatBytes, phase1Counts, shortHash } from "@/d
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MediSync Intake Demo" };
 
-const FORMAT_LABEL = { FHIR_BUNDLE: "FHIR R4 bundle", FHIR_NDJSON: "FHIR NDJSON", CCDA: "C-CDA R2.1" } as const;
-const FORMAT_CLASS = { FHIR_BUNDLE: "pill pill-fhir", FHIR_NDJSON: "pill pill-fhir", CCDA: "pill pill-ccda" } as const;
+const FORMAT_LABEL = {
+  FHIR_BUNDLE: "FHIR R4 bundle",
+  FHIR_NDJSON: "FHIR NDJSON",
+  CCDA: "C-CDA R2.1",
+} as const;
+const FORMAT_CLASS = {
+  FHIR_BUNDLE: "pill pill-fhir",
+  FHIR_NDJSON: "pill pill-fhir",
+  CCDA: "pill pill-ccda",
+} as const;
 
 const dateTime = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
@@ -17,25 +25,50 @@ export default async function DemoPage() {
   const { counts } = data;
 
   const stats = [
-    { label: "Patients", value: counts.patientCount, note: "patients · indexed by source id", state: "done" },
-    { label: "Source records", value: counts.sourceRecordCount, note: "source_records · raw, untouched", state: "done" },
-    { label: "Canonical resources", value: counts.canonicalCount, note: "canonical_resources · Phase 1", state: "next" },
-    { label: "Open mapping issues", value: counts.openIssueCount, note: "mapping_issues · Phase 1–2", state: "next" },
-    { label: "Audit entries", value: counts.auditCount, note: "audit_log · append-only", state: "done" },
+    {
+      label: "Patients",
+      value: counts.patientCount,
+      note: "patients · indexed by source id",
+      state: "done",
+    },
+    {
+      label: "Source records",
+      value: counts.sourceRecordCount,
+      note: "source_records · raw, untouched",
+      state: "done",
+    },
+    {
+      label: "Canonical resources",
+      value: counts.canonicalCount,
+      note: "canonical_resources · Phase 1",
+      state: "next",
+    },
+    {
+      label: "Open mapping issues",
+      value: counts.openIssueCount,
+      note: "mapping_issues · Phase 1–2",
+      state: "next",
+    },
+    {
+      label: "Audit entries",
+      value: counts.auditCount,
+      note: "audit_log · append-only",
+      state: "done",
+    },
   ];
 
   return (
     <main className="page">
       <header className="masthead">
         <div className="masthead-row">
-          <p className="eyebrow">MediSync · Phase 0 intake</p>
+          <p className="eyebrow">MediSync · Intake</p>
           <span className="pill pill-synthetic">Synthetic data · Synthea</span>
         </div>
         <h1>Intake demo</h1>
         <p className="lede">
-          Ten synthetic patients from Synthea, each received twice: once as a FHIR R4 transaction bundle and once
-          as a C-CDA document. Every file is stored byte-for-byte with its SHA-256, and every read and write on
-          this page lands in the audit log.
+          Ten synthetic patients from Synthea, each received twice: once as a FHIR R4 transaction
+          bundle and once as a C-CDA document. Every file is stored byte-for-byte with its SHA-256,
+          and every read and write on this page lands in the audit log.
         </p>
         <p className="fine">Rendered {dateTime(now)} from the MediSync database.</p>
       </header>
@@ -56,10 +89,11 @@ export default async function DemoPage() {
       <section aria-labelledby="patients-h">
         <h2 id="patients-h">Patients and what their FHIR bundles hold</h2>
         <p className="section-lede">
-          Counts of the resource types Phase 1 has to ingest, read from each bundle at intake. Synthea also emits
-          billing resources (Claim, ExplanationOfBenefit), which are counted in the entry total.
+          Counts of the resource types Phase 1 has to ingest, read from each bundle at intake.
+          Synthea also emits billing resources (Claim, ExplanationOfBenefit), which are counted in
+          the entry total.
         </p>
-        <div className="table-scroll">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Patients">
           <table className="ledger">
             <thead>
               <tr>
@@ -69,8 +103,12 @@ export default async function DemoPage() {
                     {c.label}
                   </th>
                 ))}
-                <th scope="col" className="num">Entries</th>
-                <th scope="col" className="num">C-CDA sections</th>
+                <th scope="col" className="num">
+                  Entries
+                </th>
+                <th scope="col" className="num">
+                  C-CDA sections
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -81,7 +119,9 @@ export default async function DemoPage() {
                     <th scope="row">
                       <span className="name">{p.displayName ?? "Unnamed"}</span>
                       <span className="subtle">
-                        {[p.gender, p.birthDate ? `${ageOn(p.birthDate, now)} y` : null].filter(Boolean).join(" · ")}
+                        {[p.gender, p.birthDate ? `${ageOn(p.birthDate, now)} y` : null]
+                          .filter(Boolean)
+                          .join(" · ")}
                         {" · "}
                         <span className="mono">{p.sourcePatientId.slice(0, 8)}</span>
                       </span>
@@ -104,8 +144,8 @@ export default async function DemoPage() {
       <section aria-labelledby="sources-h">
         <h2 id="sources-h">Source records</h2>
         <p className="section-lede">
-          The raw files as received. The preview is the first 900 characters of the stored text; the hash is
-          computed over the original bytes.
+          The raw files as received. The preview is the first 900 characters of the stored text; the
+          hash is computed over the original bytes.
         </p>
         <div className="sources">
           {data.patients.map((p, i) => (
@@ -152,7 +192,8 @@ export default async function DemoPage() {
         </div>
         {data.references.length > 0 && (
           <p className="fine">
-            Also stored, with no patient attached: {data.references.map((r) => `${r.filename} (${formatBytes(r.byteSize)})`).join(", ")}.
+            Also stored, with no patient attached:{" "}
+            {data.references.map((r) => `${r.filename} (${formatBytes(r.byteSize)})`).join(", ")}.
             These hold the Organization and Practitioner resources the patient bundles reference.
           </p>
         )}
@@ -161,13 +202,16 @@ export default async function DemoPage() {
       <section aria-labelledby="audit-h">
         <h2 id="audit-h">Audit log, latest 12</h2>
         <p className="section-lede">
-          Opening this page wrote one READ per patient. The table refuses UPDATE and DELETE at the database level.
+          Opening this page wrote one READ per patient. The table refuses UPDATE and DELETE at the
+          database level.
         </p>
-        <div className="table-scroll">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Audit log">
           <table className="ledger audit">
             <thead>
               <tr>
-                <th scope="col" className="num">#</th>
+                <th scope="col" className="num">
+                  #
+                </th>
                 <th scope="col">When</th>
                 <th scope="col">Actor</th>
                 <th scope="col">Action</th>
@@ -182,10 +226,12 @@ export default async function DemoPage() {
                   <td className="mono">{dateTime(a.occurredAt)}</td>
                   <td className="mono">{a.actor}</td>
                   <td>
-                    <span className={`pill pill-action pill-${a.action.toLowerCase()}`}>{a.action}</span>
+                    <span className={`pill pill-action pill-${a.action.toLowerCase()}`}>
+                      {a.action}
+                    </span>
                   </td>
                   <td>{a.entityType}</td>
-                  <td className="mono subtle">{a.patientId ? a.patientId.slice(0, 8) : "—"}</td>
+                  <td className="mono subtle">{a.patientId ? a.patientId.slice(0, 8) : "none"}</td>
                 </tr>
               ))}
             </tbody>
@@ -195,8 +241,8 @@ export default async function DemoPage() {
 
       <footer className="foot">
         <p>
-          Next: Phase 1 parses these sources into Zod-validated FHIR R4 resources in canonical_resources, and
-          anything that does not parse cleanly goes to mapping_issues.
+          Sources are parsed into FHIR R4 resources, mapped, and available for transfer and
+          reconciliation. Anything that does not parse cleanly stays in the review queue.
         </p>
       </footer>
     </main>

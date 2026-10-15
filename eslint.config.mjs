@@ -11,6 +11,7 @@ export default defineConfig([
     "next-env.d.ts",
     "src/generated/**",
     "fixtures/**",
+    ".claude/**",
     "tmp/**",
     "playwright-report/**",
     "test-results/**",

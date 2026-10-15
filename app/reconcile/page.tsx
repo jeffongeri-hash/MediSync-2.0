@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { pageActor } from "@/access/session";
 import { recordAudit } from "@/audit";
 import { getDb } from "@/db";
 import { RECONCILE_SOURCE } from "@/reconcile/run";
@@ -8,10 +9,16 @@ import { startRun } from "./actions";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MediSync Reconcile" };
 
-const ACTOR = "demo:provider";
 const when = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
-export default async function ReconcileIndex() {
+export default async function ReconcileIndex({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const { error: errorParam } = await searchParams;
+  const error = errorParam && errorParam.length <= 200 ? errorParam : null;
+  const actor = (await pageActor("transfer.dryRun")).actor;
   const db = getDb();
   const patients = await db.patient.findMany({
     orderBy: { displayName: "asc" },
@@ -34,7 +41,7 @@ export default async function ReconcileIndex() {
   await recordAudit(
     db,
     patients.map((p) => ({
-      actor: ACTOR,
+      actor,
       action: "READ" as const,
       patientId: p.id,
       entityType: "Patient",
@@ -47,7 +54,7 @@ export default async function ReconcileIndex() {
     <main className="page">
       <header className="masthead">
         <div className="masthead-row">
-          <p className="eyebrow">MediSync · Phase 4 reconciliation</p>
+          <p className="eyebrow">MediSync · Reconciliation</p>
           <span className="pill pill-synthetic">Synthetic data · Synthea</span>
         </div>
         <h1>Reconcile outside records</h1>
@@ -58,7 +65,12 @@ export default async function ReconcileIndex() {
           each line.
         </p>
       </header>
-      <div className="table-scroll">
+      {error ? (
+        <p className="notice" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <div className="table-scroll" tabIndex={0} role="region" aria-label="Patients to reconcile">
         <table className="ledger">
           <thead>
             <tr>

@@ -1,13 +1,14 @@
 "use server";
-// Reconcile form actions. Plain <form> posts, so they work without client JS. No authentication until Phase 6:
-// decisions are attributed to a fixed demo provider. Nothing here writes canonical rows.
+// Reconcile form actions. Plain <form> posts, so they work without client JS.
+// Decisions are attributed to the signed-in role, or demo:provider when no tokens are set.
+// Nothing here writes canonical rows.
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { pageActor } from "@/access/session";
 import { getDb } from "@/db";
 import { DecisionError, recordDecision, runReconciliation } from "@/reconcile/run";
-
-const ACTOR = "demo:provider";
+import { rateLimit } from "@/security/rate-limit";
 
 const runForm = z.object({ patientId: z.uuid() });
 const decideForm = z.object({
@@ -29,17 +30,28 @@ const field = (fd: FormData, k: string) => {
   return typeof v === "string" && v.length > 0 ? v : undefined;
 };
 
+async function reviewer() {
+  const actor = await pageActor("transfer.dryRun");
+  const hit = rateLimit(`reconcile:${actor.key}`, 30, 60_000);
+  if (!hit.ok) redirect("/reconcile?error=Too many requests. Wait a minute and try again.");
+  return actor.role === "open" ? "demo:provider" : actor.actor;
+}
+
 export async function startRun(formData: FormData) {
-  const { patientId } = runForm.parse({ patientId: field(formData, "patientId") });
+  const actor = await reviewer();
+  const parsed = runForm.safeParse({ patientId: field(formData, "patientId") });
+  if (!parsed.success) redirect("/reconcile?error=That patient id is not valid.");
   const db = getDb();
-  await db.patient.findUniqueOrThrow({ where: { id: patientId } });
-  await runReconciliation(db, { patientId, actor: ACTOR });
+  const patient = await db.patient.findUnique({ where: { id: parsed.data.patientId } });
+  if (!patient) redirect("/reconcile?error=Patient not found.");
+  await runReconciliation(db, { patientId: parsed.data.patientId, actor });
   revalidatePath("/reconcile", "layout");
-  redirect(`/reconcile/${patientId}`);
+  redirect(`/reconcile/${parsed.data.patientId}`);
 }
 
 export async function decide(formData: FormData) {
-  const f = decideForm.parse(
+  const actor = await reviewer();
+  const parsed = decideForm.safeParse(
     Object.fromEntries(
       ["patientId", "runId", "itemId", "claimId", "anchor", "action", "note", "edited"].map((k) => [
         k,
@@ -47,6 +59,8 @@ export async function decide(formData: FormData) {
       ]),
     ),
   );
+  if (!parsed.success) redirect("/reconcile?error=That decision could not be read.");
+  const f = parsed.data;
   const target = f.itemId ? { itemId: f.itemId } : f.claimId ? { claimId: f.claimId } : null;
   let error: string | null = null;
   if (!target) error = "Nothing to decide on.";
@@ -65,7 +79,7 @@ export async function decide(formData: FormData) {
           runId: f.runId,
           target,
           action: f.action,
-          actor: ACTOR,
+          actor,
           note: f.note,
           editedResource,
         });

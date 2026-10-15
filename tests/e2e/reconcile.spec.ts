@@ -24,7 +24,7 @@ test("run a reconciliation, review the cited summary, accept a line and save an 
   });
   const line = allergies.locator("tbody tr").first();
   await expect(line).toContainText(/adds|Same|Differs/);
-  await line.getByRole("button", { name: "Accept" }).click();
+  await line.getByRole("button", { name: /^Accept / }).click();
   await expect(allergies.locator("tbody tr").first()).toContainText("Accepted by demo:provider", {
     timeout: 20_000,
   });

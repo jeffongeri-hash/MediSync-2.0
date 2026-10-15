@@ -37,7 +37,7 @@
 - Each exported resource gets one Provenance resource: author is the source system, transmitter is MediSync, and entities are the source documents by sha256, duplicates included. `meta` is replaced by the versioned profile.
 - Completeness = (kept + changed) / leaf elements of the source `resource` as received, per type and overall. Changed means the same path with a new value; lost means no counterpart. id, meta and resourceType are not scored; additions are reported but not scored.
 - `transfer_jobs` run synchronously from `pnpm transfer` and `POST /api/transfer` (dry run by default there). Each job writes one EXPORT audit entry, and its EXPORT-stage issues on dry runs too. Only a real export stores the bundle text.
-- The transfer API returns job status and report, never the bundle, and has no authentication until Phase 6 (synthetic data only).
+- The transfer API returns job status and report, never the bundle. Role tokens (Phase 6) replace open access when they are set.
 - Phase 4 current chart = Bundle primaries as of a cutoff (latest encounter minus 12 months); conditions that abated after it show active. Incoming = the C-CDA rows. NDJSON copies are not reconciled.
 - Phase 4 scope: Condition (problems if active on either side, else past history), MedicationRequest/Statement, AllergyIntolerance. Procedures are not reconciled yet.
 - Pairing: dedupe link first, then same family + code + clinical day; the rest is NEW or CURRENT_ONLY. Rule flags are authoritative and always cite canonical ids; AI flags are separate suggestions.
@@ -51,3 +51,6 @@
 - The live call is streamed (`finalMessage`) with max_tokens 32000, since adaptive thinking counts toward the cap. A 400 keeps the API's message (truncated) in aiError; other failures keep only an error class.
 - CI's eval step is report-only: replay never fails the build. `pnpm eval --strict` exits 1 when an evaluated case fails, for local gating.
 - The app and the Phase 4 gate need no API key. The gate is the key-free eval (`pnpm eval --template --strict`, enforced in CI plus src/ai/eval.test.ts); the Claude summary and its pass rate are an optional enhancement.
+- Phase 6 access: reviewer, exporter, and auditor bearer tokens. None set means open (local demo and CI). Any token set fails closed. Exporter includes reviewer. Auditor is `GET /api/audit` only. The review UI uses the same token in an httpOnly cookie.
+- Phase 6: `transfer_jobs.bundle` is AES-256-GCM under `MEDISYNC_DATA_KEY`. sha256 and byte length stay on the plaintext. Raw source text stays plaintext so ingest sha256 idempotency holds. Disk encryption still has to cover that column.
+- Rate limits are in-process fixed windows. A second server does not share them.

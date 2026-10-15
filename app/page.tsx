@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { accessConfigured } from "@/access";
 
 export default function Home() {
   return (
@@ -19,6 +20,12 @@ export default function Home() {
         <Link className="button" href="/reconcile">
           Reconcile outside records
         </Link>
+        {accessConfigured() ? (
+          <>
+            {" "}
+            <Link href="/sign-in">Sign in</Link>
+          </>
+        ) : null}
       </p>
       <p className="fine">
         Synthetic data only (Synthea). No real patient information is used anywhere.
