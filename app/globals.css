@@ -11,7 +11,7 @@
   --ccda-soft: #f6ead8;
   --done: #2c6a43;
   --done-soft: #e1f0e6;
-  --next: #8a6a12;
+  --next: #755a0f; /* 5.6:1 on --next-soft (WCAG AA for small text) */
   --next-soft: #f5edd5;
   --code-bg: #eef1f5;
   --alert: #9b2226;

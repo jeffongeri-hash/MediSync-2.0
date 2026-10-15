@@ -143,7 +143,7 @@ export default async function DemoPage() {
                         <dd className="mono">{dateTime(r.receivedAt)}</dd>
                       </div>
                     </dl>
-                    <pre className="raw" aria-label={`Start of ${r.filename}`}>
+                    <pre className="raw" tabIndex={0} aria-label={`Start of ${r.filename}`}>
                       {r.preview}
                       {"\n…"}
                     </pre>
