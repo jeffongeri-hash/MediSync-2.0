@@ -16,7 +16,11 @@ export type Access = { actor: string; role: RoleName; session: SmartSession | nu
 export async function userOf(db: Db, session: SmartSession | null): Promise<Access | null> {
   if (!session?.authorizedAt) return null;
   const actor = actorOf(session);
-  return { actor, role: await roleOf(db, { actor, fhirUser: session.fhirUser }), session };
+  // No verified user (no or failed id_token): read-only, whatever was granted.
+  const role = session.fhirUser
+    ? await roleOf(db, { actor, fhirUser: session.fhirUser })
+    : Role.VIEWER;
+  return { actor, role, session };
 }
 
 /**

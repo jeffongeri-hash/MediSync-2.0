@@ -43,9 +43,13 @@ test.describe.serial("SMART launch (mock server)", () => {
     });
     const line = allergies.locator("tbody tr").first();
     await line.getByRole("button", { name: "Accept" }).click();
-    await expect(allergies.locator("tbody tr").first()).toContainText(`Accepted by smart:${USER}`, {
-      timeout: 20_000,
-    });
+    // The verified id_token's fhirUser is absolute: smart:http://127.0.0.1:<port>/fhir/Practitioner/...
+    await expect(allergies.locator("tbody tr").first()).toContainText(
+      new RegExp(`Accepted by smart:http://127\\.0\\.0\\.1:\\d+/fhir/${USER}`),
+      {
+        timeout: 20_000,
+      },
+    );
 
     const writeBack = page.locator("section", {
       has: page.getByRole("heading", { name: /^Write-back \(dry run/ }),

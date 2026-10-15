@@ -301,7 +301,9 @@ export default async function ReconcilePage({
           <span className="pill pill-synthetic">Synthetic data · Synthea</span>
         </div>
         <h1>{patient.displayName ?? "Patient"}</h1>
-        {session ? <LaunchBanner session={session} name={patient.displayName} /> : null}
+        {session ? (
+          <LaunchBanner session={session} name={patient.displayName} role={access.role} />
+        ) : null}
         <p className="lede">
           {session
             ? "The current chart is what the EHR returned at launch. Incoming is the synthetic outside C-CDA picked on the launch page."

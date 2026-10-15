@@ -2,7 +2,7 @@
 // a token endpoint, a simulated EHR launcher, and a read-only FHIR API over synthetic Synthea patients. It stands in
 // for the Epic and Oracle Health sandboxes, which this build container cannot reach. Its CapabilityStatement is a
 // fixture written for tests; it says nothing about what any EHR supports.
-import { createHash, createHmac, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
@@ -28,6 +28,8 @@ export type MockSmartOptions = {
   pageSize?: number;
   /** Searches on these types answer 500 (to test partial reads). */
   failTypes?: string[];
+  /** "forged": the id_token is signed with a key the JWKS does not publish (default "signed"). */
+  idToken?: "signed" | "forged";
 };
 
 export type MockSmart = {
@@ -159,7 +161,10 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
     }
   >();
   const tokens = new Map<string, { scope: string; patient?: string; expires: number }>();
-  const signingKey = randomBytes(32);
+  // id_tokens are RS256, verifiable through /.well-known/openid-configuration and /oauth2/jwks.
+  const signing = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  const forged = opts.idToken === "forged" ? generateKeyPairSync("rsa", { modulusLength: 2048 }) : null;
+  const jwk = { ...signing.publicKey.export({ format: "jwk" }), kid: "mock-1", alg: "RS256", use: "sig" };
   const requests: MockSmart["requests"] = [];
   let deny = false;
   let base = "";
@@ -184,10 +189,10 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
   };
   const idToken = (sub: string) => {
     const now = Math.floor(Date.now() / 1000);
-    const head = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
+    const head = b64url(JSON.stringify({ alg: "RS256", typ: "JWT", kid: "mock-1" }));
     const body = b64url(
       JSON.stringify({
-        iss,
+        iss: base,
         sub,
         aud: opts.clientId,
         iat: now,
@@ -195,7 +200,8 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
         fhirUser: `${iss}/${MOCK_PRACTITIONER}`,
       }),
     );
-    const sig = createHmac("sha256", signingKey).update(`${head}.${body}`).digest("base64url");
+    const key = (forged ?? signing).privateKey;
+    const sig = sign("sha256", Buffer.from(`${head}.${body}`), key).toString("base64url");
     return `${head}.${body}.${sig}`;
   };
   const readBody = (req: IncomingMessage) =>
@@ -394,6 +400,21 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
         },
         "application/json",
       );
+    if (req.method === "GET" && url.pathname === "/.well-known/openid-configuration")
+      return send(
+        res,
+        200,
+        {
+          issuer: base,
+          jwks_uri: `${base}/oauth2/jwks`,
+          authorization_endpoint: `${base}/oauth2/authorize`,
+          token_endpoint: `${base}/oauth2/token`,
+          id_token_signing_alg_values_supported: ["RS256"],
+        },
+        "application/json",
+      );
+    if (req.method === "GET" && url.pathname === "/oauth2/jwks")
+      return send(res, 200, { keys: [jwk] }, "application/json");
     if (req.method === "GET" && url.pathname === "/oauth2/authorize") return authorize(url, res);
     if (req.method === "POST" && url.pathname === "/oauth2/token")
       return void tokenEndpoint(req, res);

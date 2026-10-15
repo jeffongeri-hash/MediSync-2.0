@@ -7,6 +7,7 @@ import { ingestSource } from "@/ingest/ingest";
 import { runMapping } from "@/mapping/run";
 import { authorizeUrl, completeAuthorization } from "@/smart/adapter";
 import { summarizeCapability, type CapabilitySummary } from "@/smart/capability";
+import { fetchJson, verifyIdToken, type FetchJson } from "@/smart/idtoken";
 import {
   launchScope,
   normalizeIss,
@@ -110,7 +111,7 @@ export async function beginLaunch(
   return { location, setCookie: sessionCookie(token, input.secure), sessionId: id };
 }
 
-export type CompleteDeps = { now?: () => Date };
+export type CompleteDeps = { now?: () => Date; fetchJson?: FetchJson };
 
 /** Handles the redirect back from the authorization server. Returns the session it completed. */
 export async function completeLaunch(
@@ -122,7 +123,8 @@ export async function completeLaunch(
   const session = await findSession(db, input.token, deps.now?.() ?? new Date());
   if (!session) throw new LaunchError("no_session");
   if (session.authorizedAt) return session;
-  if (!serverForIss(cfg, session.iss)) throw new LaunchError("iss_not_allowed");
+  const server = serverForIss(cfg, session.iss);
+  if (!server) throw new LaunchError("iss_not_allowed");
   const authError = input.url.searchParams.get("error");
   if (authError) throw new LaunchError("denied");
 
@@ -151,7 +153,15 @@ export async function completeLaunch(
 
   const fhirPatientId = client.getPatientId();
   if (!fhirPatientId || !isFhirId(fhirPatientId)) throw new LaunchError("no_patient");
-  const fhirUser = client.getFhirUser() ?? null;
+  // Only a verified id_token names the user; without one the launch is read-only (see idtoken.ts).
+  const idToken = await verifyIdToken(state.tokenResponse.id_token, {
+    iss: session.iss,
+    clientId: server.clientId,
+    fetchJson: deps.fetchJson ?? fetchJson,
+    now: deps.now?.(),
+  });
+  const fhirUser = idToken.ok ? idToken.fhirUser : null;
+  const idTokenCheck = idToken.ok ? "verified" : idToken.reason;
   const encounterId = client.getEncounterId() ?? null;
   const grantedScope =
     typeof state.tokenResponse.scope === "string"
@@ -169,7 +179,12 @@ export async function completeLaunch(
     const queries = e instanceof RecordReadError ? e.queries : [];
     await db.smartSession.update({
       where: { id: session.id },
-      data: { fhirUser, fhirPatientId, scope: grantedScope, fetchSummary: { queries } },
+      data: {
+        fhirUser,
+        fhirPatientId,
+        scope: grantedScope,
+        fetchSummary: { queries, idToken: idTokenCheck },
+      },
     });
     throw new LaunchError("read_failed");
   }
@@ -218,7 +233,7 @@ export async function completeLaunch(
       encounterId,
       patientId: patient.id,
       sourceRecordId: ingest.sourceRecordId,
-      fetchSummary: { queries: record.queries, capability },
+      fetchSummary: { queries: record.queries, capability, idToken: idTokenCheck },
     },
   });
 

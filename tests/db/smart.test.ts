@@ -8,6 +8,7 @@ import { runReconciliation } from "@/reconcile/run";
 import { smartConfig, type SmartConfig } from "@/smart/config";
 import { beginLaunch, completeLaunch, LaunchError } from "@/smart/launch";
 import { SESSION_COOKIE } from "@/smart/session";
+import { userOf } from "@/security/access";
 import { MOCK_PRACTITIONER, mockId, startMockSmart, type MockSmart } from "../mock-smart/server";
 
 // Phase 5: EHR and standalone SMART launches against the test-only mock server (synthetic Synthea data), through
@@ -49,9 +50,9 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     return { begun, callback, token: cookieToken(begun.setCookie) };
   };
 
-  // Removes what this file creates (mock servers on 4011-4013), so other suites still see only seeded patients.
+  // Removes what this file creates (mock servers on 4011-4014), so other suites still see only seeded patients.
   const cleanup = async () => {
-    const ports = [4011, 4012, 4013];
+    const ports = [4011, 4012, 4013, 4014];
     const sourceSystem = { in: ports.map((p) => `smart:127.0.0.1:${p}`) };
     const patients = (
       await db.patient.findMany({ where: { sourceSystem }, select: { id: true } })
@@ -113,9 +114,11 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     expect(s).toMatchObject({
       launchType: "ehr",
       fhirPatientId: mockId(GONZALO),
-      fhirUser: MOCK_PRACTITIONER,
+      // The id_token's fhirUser, verified against the mock's JWKS and kept absolute.
+      fhirUser: `${mock.iss}/${MOCK_PRACTITIONER}`,
       stateEnc: null,
     });
+    expect(s.fetchSummary).toMatchObject({ idToken: "verified" });
     expect(s.encounterId).toBeTruthy();
     expect(s.scope).toContain("patient/Condition.read");
 
@@ -151,7 +154,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     ).toBe(true);
 
     const audit = await db.auditLog.findMany({
-      where: { patientId: s.patientId!, actor: `smart:${MOCK_PRACTITIONER}` },
+      where: { patientId: s.patientId!, actor: `smart:${mock.iss}/${MOCK_PRACTITIONER}` },
       orderBy: { id: "asc" },
     });
     expect(audit.some((a) => a.action === "LOGIN" && a.entityId === s.id)).toBe(true);
@@ -235,6 +238,38 @@ describe.skipIf(!process.env.DATABASE_URL)("SMART launch (database + mock server
     expect(await code(completeLaunch(db, cfg, { url: a.callback, token: a.token }))).toBe(
       "token_failed",
     );
+  }, 60_000);
+
+  it("an id_token signed with an unpublished key gives no user: the launch opens read-only", async () => {
+    const forged = await startMockSmart({
+      port: 4014,
+      clientId: "test-client",
+      redirectUris: [`${APP}/smart/callback`],
+      bundles: BUNDLES,
+      idToken: "forged",
+    });
+    try {
+      const c2 = { ...cfg, servers: [{ ...cfg.servers[0]!, iss: forged.iss }] };
+      const res = await fetch(forged.ehrLaunchUrl(`${APP}/smart/launch`, mockId(ERIK)), {
+        redirect: "manual",
+      });
+      const to = new URL(res.headers.get("location")!);
+      const begun = await beginLaunch(db, c2, {
+        kind: "ehr",
+        iss: to.searchParams.get("iss"),
+        launch: to.searchParams.get("launch"),
+        secure: false,
+      });
+      const s = await completeLaunch(db, c2, {
+        url: await authorizeAt(begun.location),
+        token: cookieToken(begun.setCookie),
+      });
+      expect(s.fhirUser).toBeNull();
+      expect(s.fetchSummary).toMatchObject({ idToken: "signature" });
+      expect(await userOf(db, s)).toMatchObject({ actor: "smart:unknown-user", role: "VIEWER" });
+    } finally {
+      await forged.close();
+    }
   }, 60_000);
 
   it("a failed search is reported and the rest of the record still loads", async () => {

@@ -11,6 +11,8 @@ import { actorOf, LAUNCH_ERRORS } from "@/smart/launch";
 import { currentSession } from "@/smart/next";
 import { startSmartRun } from "./actions";
 import { LaunchBanner } from "./banner";
+import { userOf } from "@/security/access";
+import { allows, Role } from "@/security/roles";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MediSync SMART launch" };
@@ -99,6 +101,8 @@ export default async function SmartPage({
       details: { view: "smart" },
     });
 
+  const user = await userOf(db, ready);
+  const canRun = !!user && allows(user.role, Role.PROVIDER);
   const fetchSummary = (ready?.fetchSummary ?? {}) as {
     queries?: QueryOutcome[];
     capability?: CapabilitySummary | null;
@@ -131,7 +135,7 @@ export default async function SmartPage({
         <NotLaunched />
       ) : (
         <>
-          <LaunchBanner session={ready} name={patient?.displayName ?? null} />
+          <LaunchBanner session={ready} name={patient?.displayName ?? null} role={user?.role} />
 
           <section aria-labelledby="read-h">
             <h2 id="read-h">Read at launch</h2>
@@ -174,6 +178,7 @@ export default async function SmartPage({
               The chart read above is the current side. Pick the outside record (a synthetic Synthea
               C-CDA) to compare it with.
             </p>
+            {canRun ? (
             <form action={startSmartRun} className="pick">
               <label htmlFor="incomingPatientId">Outside record</label>
               <select
@@ -196,6 +201,12 @@ export default async function SmartPage({
                 Start reconciliation
               </button>
             </form>
+            ) : (
+              <p className="notice">
+                Your role ({user?.role.toLowerCase() ?? "none"}) can view this launch. Starting a
+                reconciliation needs the provider role; ask an administrator to grant it.
+              </p>
+            )}
             {latestRun ? (
               <p className="fine">
                 Latest run {when(latestRun.createdAt)} ·{" "}

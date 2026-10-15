@@ -1,10 +1,19 @@
 // Launch context shown on every page reached through a SMART launch: which server, which user, which patient.
 import { serverLabel } from "@/smart/config";
+import type { RoleName } from "@/security/roles";
 import type { SmartSession } from "@/smart/session";
 
 const when = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
-export function LaunchBanner({ session, name }: { session: SmartSession; name: string | null }) {
+export function LaunchBanner({
+  session,
+  name,
+  role,
+}: {
+  session: SmartSession;
+  name: string | null;
+  role?: RoleName;
+}) {
   return (
     <aside className="launch-banner" aria-label="Launch context">
       <dl>
@@ -18,7 +27,15 @@ export function LaunchBanner({ session, name }: { session: SmartSession; name: s
           {session.authorizedAt ? when(session.authorizedAt) : "not completed"}
         </dd>
         <dt>User</dt>
-        <dd className="mono">{session.fhirUser ?? "not provided (no fhirUser claim)"}</dd>
+        <dd className="mono">
+          {session.fhirUser ?? "not verified (no valid id_token), so read-only"}
+        </dd>
+        {role ? (
+          <>
+            <dt>Role</dt>
+            <dd>{role.toLowerCase()}</dd>
+          </>
+        ) : null}
         <dt>Patient</dt>
         <dd>
           {name ?? "unknown"} <span className="mono subtle">Patient/{session.fhirPatientId}</span>

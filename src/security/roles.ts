@@ -57,6 +57,8 @@ export async function grantRole(
   db: Db,
   input: { actor: string; role: RoleName; by: string },
 ): Promise<void> {
+  if (input.actor === "smart:unknown-user")
+    throw new Error("smart:unknown-user stands for any launch without a verified user; it cannot hold a role");
   if (!input.actor.startsWith("smart:"))
     throw new Error("roles are granted to SMART users (smart:<fhirUser>)");
   await db.$transaction(async (tx) => {
