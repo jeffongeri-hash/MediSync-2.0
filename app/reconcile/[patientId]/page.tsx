@@ -6,6 +6,7 @@ import { getDb } from "@/db";
 import { CATEGORIES, type Category, type MatchKind, type RuleFlag } from "@/reconcile/build";
 import { day, type ReconRow } from "@/reconcile/rows";
 import { loadRunView, type RunView } from "@/reconcile/run";
+import { allows, Role } from "@/security/roles";
 import { patientAccess } from "@/smart/next";
 import { LaunchBanner } from "../../smart/banner";
 import { WriteBack } from "./write-back";
@@ -91,7 +92,15 @@ function Hidden({ values }: { values: Record<string, string> }) {
   return Object.entries(values).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />);
 }
 
-function Summary({ run, patientId }: { run: RunView; patientId: string }) {
+function Summary({
+  run,
+  patientId,
+  canDecide,
+}: {
+  run: RunView;
+  patientId: string;
+  canDecide: boolean;
+}) {
   const itemOf = new Map(
     run.items.flatMap((it) =>
       [it.currentId, it.incomingId].flatMap((id) => (id ? [[id, it.ordinal]] : [])),
@@ -137,6 +146,7 @@ function Summary({ run, patientId }: { run: RunView; patientId: string }) {
                   ))}
                 </p>
                 <Decision d={c.decision} />
+                {canDecide ? (
                 <form action={decide} className="decide">
                   <Hidden
                     values={{
@@ -153,6 +163,7 @@ function Summary({ run, patientId }: { run: RunView; patientId: string }) {
                     Reject
                   </button>
                 </form>
+                ) : null}
               </li>
             ))}
           </ul>
@@ -180,10 +191,12 @@ function CategoryTable({
   run,
   category,
   patientId,
+  canDecide,
 }: {
   run: RunView;
   category: Category;
   patientId: string;
+  canDecide: boolean;
 }) {
   const items = run.items.filter((it) => it.category === category);
   if (items.length === 0) return null;
@@ -223,6 +236,7 @@ function CategoryTable({
                 </td>
                 <td>
                   <Decision d={it.decision} />
+                  {canDecide ? (
                   <form action={decide} className="decide">
                     <Hidden
                       values={{
@@ -242,6 +256,7 @@ function CategoryTable({
                       Edit
                     </Link>
                   </form>
+                  ) : null}
                 </td>
               </tr>
             ))}
@@ -269,6 +284,7 @@ export default async function ReconcilePage({
   const access = await patientAccess(patient);
   if (!access) notFound();
   const { session } = access;
+  const canDecide = allows(access.role, Role.PROVIDER);
   const run = await loadRunView(db, { patientId, actor: access.actor });
 
   return (
@@ -300,21 +316,29 @@ export default async function ReconcilePage({
             · {run.rulesVersion}
           </p>
         ) : null}
+        {canDecide ? (
         <form action={startRun}>
           <input type="hidden" name="patientId" value={patientId} />
           <button className="button" type="submit">
             {run ? "Run reconciliation again" : "Run reconciliation"}
           </button>
         </form>
+        ) : (<p className="fine">You can read this reconciliation. Running it and recording decisions needs the provider role.</p>)}
       </header>
       {error ? <p className="notice">{error}</p> : null}
       {run ? (
         <>
-          <Summary run={run} patientId={patientId} />
+          <Summary run={run} patientId={patientId} canDecide={canDecide} />
           {CATEGORIES.map((c) => (
-            <CategoryTable key={c} run={run} category={c} patientId={patientId} />
+            <CategoryTable
+              key={c}
+              run={run}
+              category={c}
+              patientId={patientId}
+              canDecide={canDecide}
+            />
           ))}
-          {session ? <WriteBack session={session} runId={run.id} /> : null}
+          {session && canDecide ? <WriteBack session={session} runId={run.id} /> : null}
         </>
       ) : (
         <p>No reconciliation has been run for this patient yet.</p>

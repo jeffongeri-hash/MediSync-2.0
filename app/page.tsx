@@ -1,4 +1,8 @@
 import Link from "next/link";
+import { demoMode } from "@/security/roles";
+
+// Reads DEMO_MODE per request, not at build time.
+export const dynamic = "force-dynamic";
 
 export default function Home() {
   return (
@@ -12,14 +16,21 @@ export default function Home() {
           touches the chart.
         </p>
       </header>
-      <p>
-        <Link className="button" href="/demo">
-          Open the intake demo
-        </Link>{" "}
-        <Link className="button" href="/reconcile">
-          Reconcile outside records
-        </Link>
-      </p>
+      {demoMode() ? (
+        <p>
+          <Link className="button" href="/demo">
+            Open the intake demo
+          </Link>{" "}
+          <Link className="button" href="/reconcile">
+            Reconcile outside records
+          </Link>
+        </p>
+      ) : (
+        <p>
+          Open MediSync from a patient&apos;s chart in your EHR. The launch signs you in and opens
+          that patient.
+        </p>
+      )}
       <p className="fine">
         Synthetic data only (Synthea). No real patient information is used anywhere.
       </p>

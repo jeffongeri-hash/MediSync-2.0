@@ -7,7 +7,8 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { SYNTHEA_SOURCE } from "@/ingest/seed";
 import { runReconciliation } from "@/reconcile/run";
-import { actorOf } from "@/smart/launch";
+import { userOf } from "@/security/access";
+import { allows, Role } from "@/security/roles";
 import { currentSession } from "@/smart/next";
 
 export async function startSmartRun(formData: FormData) {
@@ -15,8 +16,10 @@ export async function startSmartRun(formData: FormData) {
   const session = await currentSession();
   if (!session?.authorizedAt || !session.patientId || !session.sourceRecordId)
     redirect("/smart?error=no_session");
-  if (!picked.success) redirect("/smart?error=outside_record");
   const db = getDb();
+  const user = await userOf(db, session);
+  if (!user || !allows(user.role, Role.PROVIDER)) redirect("/smart?error=forbidden");
+  if (!picked.success) redirect("/smart?error=outside_record");
   const outside = await db.patient.findFirst({
     where: {
       id: picked.data,
@@ -28,7 +31,7 @@ export async function startSmartRun(formData: FormData) {
   if (!outside) redirect("/smart?error=outside_record");
   await runReconciliation(db, {
     patientId: session.patientId,
-    actor: actorOf(session),
+    actor: user.actor,
     scope: { currentSourceRecordId: session.sourceRecordId, incomingPatientId: outside.id },
   });
   revalidatePath("/smart");

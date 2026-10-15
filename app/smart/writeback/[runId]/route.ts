@@ -5,18 +5,21 @@ import { z } from "zod";
 import { recordAudit } from "@/audit";
 import { getDb } from "@/db";
 import type { CapabilitySummary } from "@/smart/capability";
-import { actorOf } from "@/smart/launch";
-import { currentSession } from "@/smart/next";
+import { requestSession, userOf } from "@/security/access";
+import { allows, Role } from "@/security/roles";
 import { buildWritePackage, loadWriteItems } from "@/smart/writeback";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ runId: string }> }) {
   const { runId } = await params;
-  const session = await currentSession();
+  const db = getDb();
+  const session = await requestSession(db, req);
   if (!z.uuid().safeParse(runId).success || !session?.authorizedAt || !session.patientId)
     return NextResponse.json({ error: "not_found" }, { status: 404 });
-  const db = getDb();
+  const user = await userOf(db, session);
+  if (!user || !allows(user.role, Role.PROVIDER))
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const run = await db.reconciliationRun.findFirst({
     where: { id: runId, patientId: session.patientId },
     select: { id: true },
@@ -32,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ run
     now: new Date(),
   });
   await recordAudit(db, {
-    actor: actorOf(session),
+    actor: user.actor,
     action: "EXPORT",
     patientId: session.patientId,
     entityType: "ReconciliationRun",

@@ -20,6 +20,8 @@ const redirectUri = `http://localhost:${port}/smart/callback`;
 const smartEnv: Record<string, string> = {
   SMART_SERVERS: mocks.map((m) => m.name).join(","),
   SMART_REDIRECT_URI: redirectUri,
+  // Demo mode opens the seeded patients; `next start` is a production build, where it is off by default.
+  DEMO_MODE: "1",
   SESSION_SECRET: process.env.SESSION_SECRET || randomBytes(32).toString("base64"),
 };
 for (const m of mocks) {

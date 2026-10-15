@@ -407,3 +407,21 @@ model SmartSession {
   @@index([expiresAt])
   @@map("smart_sessions")
 }
+
+/// Phase 6 roles. VIEWER reads; PROVIDER also decides, writes back and transfers; ADMIN also exports the audit log.
+enum Role {
+  VIEWER
+  PROVIDER
+  ADMIN
+}
+
+/// A role granted to one SMART user (actor `smart:<fhirUser>`) with `pnpm roles`. Without a row, a Practitioner or
+/// PractitionerRole fhirUser is PROVIDER and anyone else VIEWER. Every grant and revoke is audited.
+model UserRole {
+  actor     String   @id
+  role      Role
+  grantedBy String   @map("granted_by")
+  grantedAt DateTime @default(now()) @map("granted_at")
+
+  @@map("user_roles")
+}

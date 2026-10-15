@@ -30,7 +30,8 @@
     "eval": "tsx scripts/eval.ts",
     "eval:build": "tsx scripts/eval-build.ts",
     "mock:smart": "tsx scripts/mock-smart.ts",
-    "smart:capability": "tsx scripts/smart-capability.ts"
+    "smart:capability": "tsx scripts/smart-capability.ts",
+    "roles": "tsx scripts/roles.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

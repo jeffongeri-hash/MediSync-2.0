@@ -1,12 +1,13 @@
 "use server";
-// Reconcile form actions. Plain <form> posts, so they work without client JS. No authentication until Phase 6:
-// decisions on the seeded patients are attributed to a fixed demo provider; on a patient opened by a SMART launch,
-// to the launch's fhirUser, and only from that launch. Nothing here writes canonical rows.
+// Reconcile form actions. Plain <form> posts, so they work without client JS. Both need the provider role: on a
+// patient opened by a SMART launch, as the launch's user and only from that launch; on a seeded patient, as the demo
+// provider in demo mode. Nothing here writes canonical rows.
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/db";
 import { DecisionError, recordDecision, runReconciliation } from "@/reconcile/run";
+import { allows, Role, RoleError } from "@/security/roles";
 import { patientAccess } from "@/smart/next";
 
 async function access(patientId: string) {
@@ -16,6 +17,10 @@ async function access(patientId: string) {
   });
   const a = await patientAccess(patient);
   if (!a) redirect("/smart?error=no_session");
+  if (!allows(a.role, Role.PROVIDER))
+    redirect(
+      `/reconcile/${patientId}?error=${encodeURIComponent(new RoleError(Role.PROVIDER, a.role).message)}`,
+    );
   return a;
 }
 

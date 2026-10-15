@@ -2,13 +2,10 @@
 import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { getDb } from "@/db";
-import { SYNTHEA_SOURCE } from "@/ingest/seed";
+import { accessFor, type Access } from "@/security/access";
 import { smartConfig, SmartConfigError, type LaunchKind } from "@/smart/config";
-import { actorOf, beginLaunch, completeLaunch, LaunchError } from "@/smart/launch";
+import { beginLaunch, completeLaunch, LaunchError } from "@/smart/launch";
 import { findSession, SESSION_COOKIE, type SmartSession } from "@/smart/session";
-
-/** Phase 4 demo actor for the seeded Synthea patients (no authentication until Phase 6). */
-export const DEMO_ACTOR = "demo:provider";
 
 const toLanding = (base: string, error?: string) =>
   NextResponse.redirect(
@@ -69,16 +66,7 @@ export async function currentSession(): Promise<SmartSession | null> {
   return findSession(getDb(), jar.get(SESSION_COOKIE)?.value);
 }
 
-/**
- * Who may act on a patient, and as whom. Seeded Synthea patients stay open to the demo provider. A patient read
- * through a SMART launch is reachable only from that launch (its patient context), acting as the launch's fhirUser.
- */
-export async function patientAccess(patient: {
-  id: string;
-  sourceSystem: string;
-}): Promise<{ actor: string; session: SmartSession | null } | null> {
-  const session = await currentSession();
-  const launched = session?.authorizedAt && session.patientId === patient.id ? session : null;
-  if (launched) return { actor: actorOf(launched), session: launched };
-  return patient.sourceSystem === SYNTHEA_SOURCE ? { actor: DEMO_ACTOR, session: null } : null;
+/** Who may act on a patient, and as whom (see accessFor). */
+export async function patientAccess(patient: { id: string; sourceSystem: string }): Promise<Access | null> {
+  return accessFor(getDb(), await currentSession(), patient);
 }

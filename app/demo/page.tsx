@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { getDb } from "@/db";
 import { getDemoData } from "@/demo/data";
 import { PHASE1_COLUMNS, ageOn, formatBytes, phase1Counts, shortHash } from "@/demo/format";
+import { demoMode } from "@/security/roles";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MediSync Intake Demo" };
@@ -12,6 +14,7 @@ const FORMAT_CLASS = { FHIR_BUNDLE: "pill pill-fhir", FHIR_NDJSON: "pill pill-fh
 const dateTime = (d: Date) => d.toISOString().replace("T", " ").slice(0, 16) + " UTC";
 
 export default async function DemoPage() {
+  if (!demoMode()) notFound();
   const data = await getDemoData(getDb(), "demo:viewer");
   const now = new Date();
   const { counts } = data;

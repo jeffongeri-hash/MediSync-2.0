@@ -46,6 +46,7 @@ export const LAUNCH_ERRORS: Record<string, string> = {
   discovery_failed: "Could not read the server's SMART configuration.",
   server_not_smart: "The server did not advertise an authorization endpoint.",
   no_session: "No launch in progress in this browser. Launch again.",
+  forbidden: "Your role can view this launch but not start a reconciliation or download a write-back. Ask an administrator for the provider role.",
   denied: "The authorization server declined the request.",
   state_mismatch: "The authorization response does not belong to this launch. Launch again.",
   token_failed: "The code could not be exchanged for an access token.",
