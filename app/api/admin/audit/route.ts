@@ -4,6 +4,8 @@ import type { NextRequest } from "next/server";
 import { exportAudit } from "@/audit/chain";
 import { getDb } from "@/db";
 import { requestSession, userOf } from "@/security/access";
+import { guarded } from "@/http";
+import { limitRequest, RULES } from "@/security/ratelimit";
 import { allows, Role } from "@/security/roles";
 
 export const dynamic = "force-dynamic";
@@ -14,9 +16,12 @@ const date = (v: string | null) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-export async function GET(req: NextRequest) {
+export const GET = guarded("GET /api/admin/audit", async (req: NextRequest) => {
   const db = getDb();
-  const user = await userOf(db, await requestSession(db, req));
+  const session = await requestSession(db, req);
+  const limited = await limitRequest(db, RULES.auditExport, session, req);
+  if (limited) return limited;
+  const user = await userOf(db, session);
   if (!user)
     return Response.json({ error: "launch MediSync from your EHR first" }, { status: 401 });
   if (!allows(user.role, Role.ADMIN))
@@ -34,4 +39,4 @@ export async function GET(req: NextRequest) {
       "x-audit-chain": r.check.verified ? "verified" : "broken",
     },
   });
-}
+});

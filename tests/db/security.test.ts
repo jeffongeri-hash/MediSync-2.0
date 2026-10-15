@@ -14,6 +14,7 @@ import { sha256 } from "@/ingest/source-summary";
 import { accessFor, DEMO_ACTOR } from "@/security/access";
 import { dataKeys, keyIdOf, openText, rawTextAad } from "@/security/crypt";
 import { rotateSealed } from "@/security/rotate";
+import { hit, subjectOf } from "@/security/ratelimit";
 import { grantRole, revokeRole, roleOf } from "@/security/roles";
 import { createSession, SESSION_COOKIE } from "@/smart/session";
 import { POST as transferPost } from "../../app/api/transfer/route";
@@ -58,6 +59,7 @@ describe.skipIf(!process.env.DATABASE_URL)("roles and access (database)", () => 
     await db.smartSession.deleteMany({ where: { iss: ISS } });
     await db.userRole.deleteMany({ where: { actor: { startsWith: `smart:${ISS}` } } });
     await db.sourceRecord.deleteMany({ where: { sourceSystem: "test-rotate" } });
+    await db.rateLimit.deleteMany({ where: { key: { startsWith: "test-" } } });
   };
 
   beforeAll(async () => {
@@ -266,5 +268,34 @@ describe.skipIf(!process.env.DATABASE_URL)("roles and access (database)", () => 
       orderBy: { id: "desc" },
     });
     expect(logged?.details).toMatchObject({ verified: true, from });
+  });
+
+  it("counts requests per fixed window and says when to retry", async () => {
+    const rule = { name: `test-${Date.now()}`, limit: 2, windowSec: 60 };
+    const at = new Date("2026-10-15T12:00:10.000Z");
+    expect(await hit(db, rule, "s:one", at)).toBeNull();
+    expect(await hit(db, rule, "s:one", at)).toBeNull();
+    expect(await hit(db, rule, "s:one", at)).toBe(50);
+    expect(await hit(db, rule, "s:two", at)).toBeNull();
+    expect(await hit(db, rule, "s:one", new Date("2026-10-15T12:01:00.000Z"))).toBeNull();
+  });
+
+  it("keys by session, else by a hashed client IP only behind a trusted proxy", () => {
+    const h = new Headers({ "x-forwarded-for": "203.0.113.7, 10.0.0.1" });
+    expect(subjectOf({ id: "a".repeat(64) }, h, { TRUST_PROXY: "1" })).toBe(`s:${"a".repeat(32)}`);
+    const ip = subjectOf(null, h, { TRUST_PROXY: "1" });
+    expect(ip).toMatch(/^ip:[0-9a-f]{32}$/);
+    expect(ip).not.toContain("203.0");
+    expect(subjectOf(null, h, {})).toBe("ip:unknown");
+  });
+
+  it("answers 429 with Retry-After once a route's limit is spent", async () => {
+    const { token } = await createSession(db, { launchType: "ehr", iss: ISS });
+    const get = () => auditGet(req("/api/admin/audit", token));
+    for (let i = 0; i < 5; i++) expect((await get()).status).toBe(401);
+    const res = await get();
+    expect(res.status).toBe(429);
+    expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
+    expect(await res.json()).toMatchObject({ error: "too many requests" });
   });
 });

@@ -1,8 +1,10 @@
 // Next.js glue for the SMART routes and pages: cookies in, redirects out. The launch logic lives in launch.ts.
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { getDb } from "@/db";
+import { errorClass, log } from "@/log";
 import { accessFor, type Access } from "@/security/access";
+import { hit, limitRequest, RULES, subjectOf, type Rule } from "@/security/ratelimit";
 import { smartConfig, SmartConfigError, type LaunchKind } from "@/smart/config";
 import { beginLaunch, completeLaunch, LaunchError } from "@/smart/launch";
 import { findSession, SESSION_COOKIE, type SmartSession } from "@/smart/session";
@@ -17,12 +19,14 @@ const failureCode = (e: unknown) => {
   if (e instanceof LaunchError) return e.code;
   if (e instanceof SmartConfigError) return "config";
   // Class only: messages from the auth or FHIR server can carry URLs with ids.
-  console.error("smart launch failed:", e instanceof Error ? e.name : typeof e);
+  log("error", "smart_launch_failed", { errorClass: errorClass(e) });
   return "unexpected";
 };
 
 /** GET /smart/launch (EHR launch: iss + launch) and GET /smart/login (standalone, optional iss). */
-export async function launchRoute(req: NextRequest, kind: LaunchKind): Promise<NextResponse> {
+export async function launchRoute(req: NextRequest, kind: LaunchKind): Promise<Response> {
+  const limited = await limitRequest(getDb(), RULES.launch, null, req);
+  if (limited) return limited;
   let base = req.nextUrl.origin;
   try {
     const cfg = smartConfig();
@@ -45,7 +49,9 @@ export async function launchRoute(req: NextRequest, kind: LaunchKind): Promise<N
 }
 
 /** GET /smart/callback: the authorization server's redirect back (code + state, or error). */
-export async function callbackRoute(req: NextRequest): Promise<NextResponse> {
+export async function callbackRoute(req: NextRequest): Promise<Response> {
+  const limited = await limitRequest(getDb(), RULES.launch, null, req);
+  if (limited) return limited;
   let base = req.nextUrl.origin;
   try {
     const cfg = smartConfig();
@@ -69,4 +75,12 @@ export async function currentSession(): Promise<SmartSession | null> {
 /** Who may act on a patient, and as whom (see accessFor). */
 export async function patientAccess(patient: { id: string; sourceSystem: string }): Promise<Access | null> {
   return accessFor(getDb(), await currentSession(), patient);
+}
+
+/**
+ * Server actions: counts one request against `rule` for this browser (its SMART session, else its IP). Returns the
+ * seconds to wait when over the limit, else null.
+ */
+export async function limitAction(rule: Rule, session: SmartSession | null): Promise<number | null> {
+  return hit(getDb(), rule, subjectOf(session, await headers()));
 }

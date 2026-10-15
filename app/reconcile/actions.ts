@@ -8,7 +8,8 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { DecisionError, recordDecision, runReconciliation } from "@/reconcile/run";
 import { allows, Role, RoleError } from "@/security/roles";
-import { patientAccess } from "@/smart/next";
+import { RULES } from "@/security/ratelimit";
+import { limitAction, patientAccess } from "@/smart/next";
 
 async function access(patientId: string) {
   const patient = await getDb().patient.findUniqueOrThrow({
@@ -17,6 +18,9 @@ async function access(patientId: string) {
   });
   const a = await patientAccess(patient);
   if (!a) redirect("/smart?error=no_session");
+  const wait = await limitAction(RULES.decide, a.session);
+  if (wait !== null)
+    redirect(`/reconcile/${patientId}?error=${encodeURIComponent(`Too many requests. Try again in ${wait} seconds.`)}`);
   if (!allows(a.role, Role.PROVIDER))
     redirect(
       `/reconcile/${patientId}?error=${encodeURIComponent(new RoleError(Role.PROVIDER, a.role).message)}`,

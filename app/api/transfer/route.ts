@@ -6,6 +6,8 @@ import { z } from "zod";
 import { getDb } from "@/db";
 import { JOB_VIEW, PatientNotFoundError, resolvePatient, runTransfer } from "@/export/run";
 import { accessFor, requestSession } from "@/security/access";
+import { guarded } from "@/http";
+import { limitRequest, RULES } from "@/security/ratelimit";
 import { allows, demoMode, Role } from "@/security/roles";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +17,11 @@ const body = z.strictObject({
   dryRun: z.boolean().default(true),
 });
 
-export async function POST(request: NextRequest) {
+export const POST = guarded("POST /api/transfer", async (request: NextRequest) => {
   const db = getDb();
   const session = await requestSession(db, request);
+  const limited = await limitRequest(db, RULES.transferRun, session, request);
+  if (limited) return limited;
   if (!session?.authorizedAt && !demoMode())
     return Response.json({ error: "launch MediSync from your EHR first" }, { status: 401 });
   const parsed = body.safeParse(await request.json().catch(() => null));
@@ -52,4 +56,4 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: err.message }, { status: 404 });
     throw err;
   }
-}
+});

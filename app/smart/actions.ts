@@ -9,13 +9,15 @@ import { SYNTHEA_SOURCE } from "@/ingest/seed";
 import { runReconciliation } from "@/reconcile/run";
 import { userOf } from "@/security/access";
 import { allows, Role } from "@/security/roles";
-import { currentSession } from "@/smart/next";
+import { RULES } from "@/security/ratelimit";
+import { currentSession, limitAction } from "@/smart/next";
 
 export async function startSmartRun(formData: FormData) {
   const picked = z.uuid().safeParse(formData.get("incomingPatientId"));
   const session = await currentSession();
   if (!session?.authorizedAt || !session.patientId || !session.sourceRecordId)
     redirect("/smart?error=no_session");
+  if ((await limitAction(RULES.decide, session)) !== null) redirect("/smart?error=rate_limited");
   const db = getDb();
   const user = await userOf(db, session);
   if (!user || !allows(user.role, Role.PROVIDER)) redirect("/smart?error=forbidden");

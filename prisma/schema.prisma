@@ -429,3 +429,15 @@ model UserRole {
 
   @@map("user_roles")
 }
+
+/// Fixed-window request counters for rate limits (Phase 6). key = "<rule>:<subject>", subject a session id or a
+/// hashed client IP (never the IP itself). Windows older than an hour are pruned.
+model RateLimit {
+  key         String
+  windowStart DateTime @map("window_start")
+  count       Int
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+  @@map("rate_limits")
+}
