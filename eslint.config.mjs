@@ -12,6 +12,7 @@ export default defineConfig([
     "src/generated/**",
     "fixtures/**",
     "tmp/**",
+    ".claude/**",
     "playwright-report/**",
     "test-results/**",
   ]),
