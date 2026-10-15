@@ -133,6 +133,9 @@ describe.skipIf(!process.env.DATABASE_URL)("roles and access (database)", () => 
     await expect(
       grantRole(db, { actor: "demo:provider", role: "ADMIN", by: "x" }),
     ).rejects.toThrow();
+    await expect(
+      grantRole(db, { actor: "smart:unknown-user", role: "PROVIDER", by: "x" }),
+    ).rejects.toThrow(/cannot hold a role/);
   });
 
   it("enforces role and patient on POST /api/transfer", async () => {

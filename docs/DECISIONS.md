@@ -37,7 +37,7 @@
 - Each exported resource gets one Provenance resource: author is the source system, transmitter is MediSync, and entities are the source documents by sha256, duplicates included. `meta` is replaced by the versioned profile.
 - Completeness = (kept + changed) / leaf elements of the source `resource` as received, per type and overall. Changed means the same path with a new value; lost means no counterpart. id, meta and resourceType are not scored; additions are reported but not scored.
 - `transfer_jobs` run synchronously from `pnpm transfer` and `POST /api/transfer` (dry run by default there). Each job writes one EXPORT audit entry, and its EXPORT-stage issues on dry runs too. Only a real export stores the bundle text.
-- The transfer API returns job status and report, never the bundle, and has no authentication until Phase 6 (synthetic data only).
+- The transfer API returns job status and report, never the bundle. Since Phase 6 it needs a launched session for the patient (or demo mode) and the provider role.
 - Phase 4 current chart = Bundle primaries as of a cutoff (latest encounter minus 12 months); conditions that abated after it show active. Incoming = the C-CDA rows. NDJSON copies are not reconciled.
 - Phase 4 scope: Condition (problems if active on either side, else past history), MedicationRequest/Statement, AllergyIntolerance. Procedures are not reconciled yet.
 - Pairing: dedupe link first, then same family + code + clinical day; the rest is NEW or CURRENT_ONLY. Rule flags are authoritative and always cite canonical ids; AI flags are separate suggestions.
@@ -56,7 +56,7 @@
 - Servers: one app registration per EHR, so client id (and optional scopes) is per server: `SMART_SERVERS=epic,oracle` + SMART_<NAME>_ISS/_CLIENT_ID/_SCOPE, or the single form SMART_ISS + SMART_CLIENT_ID. Redirect URI and SESSION_SECRET are shared.
 - An EHR launch is routed by its exact iss; standalone by `?server=<name>` (default: the first server). Any other iss is refused, and so is a server without an authorization endpoint.
 - smart_sessions row keyed by sha256 of an httpOnly SameSite=Lax cookie (8 h); fhirclient state sealed with AES-256-GCM (SESSION_SECRET, session id as AAD); tokens are discarded after the launch read.
-- id_token claims (fhirUser) are read without a signature check: received directly from the token endpoint over TLS (OIDC Core 3.1.3.7). Revisit in Phase 6.
+- (Phase 5, superseded in Phase 6) id_token claims were read without a signature check.
 - Launch read: Patient + Condition (3 US Core categories) + MedicationRequest + AllergyIntolerance + Encounter, next links followed only on the iss, missing Medications read by id; a failed search is reported, a failed Patient read fails the launch.
 - The read is one deterministic collection Bundle (sorted, absolute fullUrls, resources as received) ingested as FHIR_BUNDLE under `epic-sandbox` (fhir.epic.com), `oracle-sandbox` (fhir-ehr-code.cerner.com) or `smart:<host:port>`; an unchanged chart is the same bytes, so no new rows. Absolute references equal to an entry fullUrl resolve at ingest.
 - Launch-scoped reconcile: current = exactly the launch's source record, cutoff = run time; incoming = a seeded Synthea C-CDA the provider picks (suggested by same name + birth date). Runs store incoming_patient_id and current_source_record_id.
@@ -65,3 +65,17 @@
 - Audit: LOGIN per completed launch, one READ per launch query (label and counts, no ids), READ of the outside patient on scoped runs.
 - tests/mock-smart is test-only: auto-approving authorize, PKCE-checking token endpoint, EHR launcher, paged read-only FHIR over Synthea patients with `mock-<id>` ids. Its CapabilityStatement is a fixture, never cited as Epic's; `smart:capability` writes docs/reports/phase5-writeback-<source>.md only for the Epic and Oracle Health sandboxes.
 - Oracle Health (Cerner) Millennium is a second SMART server on the same code path: same reads, scopes and write-back dry run; no vendor-specific branches until the sandbox run shows a need.
+- Phase 6 identity is the SMART launch only. Roles VIEWER < PROVIDER < ADMIN; a user_roles grant keyed by actor `smart:<fhirUser>` wins, else Practitioner/PractitionerRole = PROVIDER and anyone else VIEWER. `pnpm roles` changes grants, audited as UPDATE/DELETE on UserRole.
+- DEMO_MODE (1|true, 0|false; unset = on unless NODE_ENV=production) opens the seeded Synthea patients to `demo:provider` (PROVIDER, never ADMIN). Off: /demo and the /reconcile list are 404, the API needs a launched session.
+- Roles are enforced on the server: route handlers answer 403, server actions redirect with the role message. Pages hide write controls from viewers.
+- fhirUser comes only from a verified id_token: RS256/ES256 against the JWKS from OIDC discovery on the iss or token-endpoint origin, plus iss, aud, exp, iat. It is stored absolute (a relative one is resolved against the iss). Unverified = `smart:unknown-user`, VIEWER, not grantable.
+- Encryption at rest: source_records.raw_text and transfer_jobs.bundle are `enc:<keyId>:<sealed>` (AES-256-GCM via the session sealer, AAD = column + row sha256). sha256 stays over the plaintext; plaintext still reads; a production build refuses to store without DATA_KEYS; `pnpm crypt:rotate` (and db:seed) re-seals.
+- Canonical, reconcile and summary JSON stay readable to the app and rely on database-level encryption (SECURITY.md 14-15).
+- audit_log hash chain: a BEFORE INSERT trigger, serialized by a transaction advisory lock, re-draws the id and sets hash = sha256 over prev_hash and the length-prefixed fields (time as ISO ms UTC, details as stored jsonb text). Existing rows were backfilled by the migration. Assumes READ COMMITTED.
+- Audit writes stay last in their transactions, because the chain lock is held until commit.
+- Audit export = NDJSON of the hashed fields as text plus a `{"chain": ...}` trailer. The chain is verified first; the export is an EXPORT row (entityType AuditLog). CLI or admin-only API.
+- Rate limits: fixed windows in rate_limits, keyed by rule + session id, else sha256 of the X-Forwarded-For IP (only with TRUST_PROXY=1), else one shared bucket. 429 JSON + Retry-After; server actions redirect with a message; the callback counts per session.
+- proxy.ts sets a nonce CSP ('strict-dynamic'; the root layout is dynamic so every page gets the nonce), frame-ancestors 'self' + SMART_<NAME>_FRAME_ANCESTORS (default: the iss origin), no X-Frame-Options, no-referrer, HSTS over HTTPS. COOP waits for the sandbox runs.
+- Logs: src/log.ts writes an event plus allowlisted non-identifying fields; production console calls go through it (instrumentation.ts); route errors become 500 {error, requestId} (src/http.ts). Error pages (app/error-view.tsx) show the digest only.
+- Accessibility gate: axe-core WCAG 2.1 A/AA in Playwright on every page, launched views and the error page included. Serious or critical issues and browser CSP violations fail the build.
+- The vendored skills in .claude/skills (PR #1) are outside lint, typecheck and Prettier. When a skill conflicts with CLAUDE.md's protocol (subagents, stopping at gates), CLAUDE.md wins.

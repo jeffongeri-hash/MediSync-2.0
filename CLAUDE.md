@@ -36,12 +36,14 @@ Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient
 - `pnpm transfer <patient> [--dry-run] [--out dir] [--report file] [--at instant]` (US Core bundle + fidelity report; `exports/` is gitignored) · API: `POST /api/transfer`, `GET /api/transfer/:id`
 - `pnpm eval` (replay recorded Claude answers) · `--live` (needs ANTHROPIC_API_KEY; re-records) · `--template` (no AI) · `--cases a,b` · `--prompts dir` (dump prompts, send nothing) · `--strict` · `--out file` · `pnpm eval:build` (rebuild fixtures/eval from the DB)
 - SMART (Phase 5): `/smart/launch` (EHR launch), `/smart/login[?server=name]` (standalone), `/smart/callback`, `/smart` · `pnpm mock:smart` (test-only mock server, iss http://127.0.0.1:4010/fhir) · `pnpm smart:capability [iss | --server name] [--out f] [--raw f]` (write-back report from `{iss}/metadata`) · runbooks: docs/EPIC_SANDBOX.md, docs/ORACLE_SANDBOX.md
+- Security (Phase 6): `pnpm roles list|grant <smart:fhirUser> <viewer|provider|admin>|revoke <smart:fhirUser>` · `pnpm crypt:rotate` (re-seal raw_text and bundles with DATA_KEY_ID) · `pnpm audit:verify` · `pnpm audit:export [--from ISO] [--to ISO] [--out f]` · API: `GET /api/admin/audit` (admin) · `DEMO_MODE` opens the seeded patients · checklist: docs/SECURITY.md
 
 ## Conventions
 - Canonical internal model = FHIR R4 resources validated with Zod. All sources map INTO it; all exports map OUT of it.
 - Every mapping is a pure function with unit tests and a fixture.
 - Terminology: SNOMED (problems), RxNorm (meds), LOINC (labs), ICD-10 (dx). Unmapped codes go to a review queue, never silently dropped.
-- Folder layout: `src/ingest`, `src/canonical`, `src/mapping`, `src/export`, `src/reconcile`, `src/ai`, `src/smart`, `src/audit`, `app/`.
+- Folder layout: `src/ingest`, `src/canonical`, `src/mapping`, `src/export`, `src/reconcile`, `src/ai`, `src/smart`, `src/audit`, `src/security`, `app/`.
+- App logs go through `src/log.ts` (allowlisted fields only), never `console`. Route handlers are wrapped in `guarded()` (`src/http.ts`).
 
 ## Project skills
 Claude Code loads `.claude/skills/<name>/SKILL.md`. These copies are upstream files, not app logic.

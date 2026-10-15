@@ -109,3 +109,22 @@ build container's network policy. Re-check when those hosts are reachable, and n
   separately readable resource (MedicationRequest carries medicationCodeableConcept); PKCE S256 advertised for public clients.
 - Write-back: NOT documented. Pending docs/ORACLE_SANDBOX.md step 6 (docs/reports/phase5-writeback-oracle-sandbox.md).
 - Verified only against two mock servers with separate client ids (tests/db/smart.test.ts, tests/e2e/smart.spec.ts).
+
+## Hardening (Phase 6, 2026-10-15)
+- Next 16 (from its bundled docs in `node_modules/next/dist/docs/`, not the web): middleware is renamed `proxy.ts` and runs
+  on the Node.js runtime; a nonce CSP needs dynamic rendering, so the root layout is `force-dynamic`.
+- fhirclient 3 `getFhirUser()` keeps only the last two path segments of the claim (`Practitioner/<id>`), so two EHRs
+  could produce the same actor. Phase 6 reads the verified claim itself and stores it absolute.
+- Postgres: `ORDER BY id` after `id::text AS "id"` sorts by the text alias (1, 10, 100). Qualify the column
+  (`audit_log.id`) when a query renames it.
+- Playwright: its TSX transform turns JSX inside imported app components into its own objects, and it cannot load the
+  generated Prisma client (ESM). The e2e tests reach the database through the `pnpm roles` CLI instead.
+- @axe-core/playwright 4.10.2: axe's stylesheet preload fetches cross-origin CSS (Google Fonts) and trips
+  `connect-src 'self'`. The a11y spec turns preload off and checks the page's own CSP report before axe runs.
+- `pnpm audit --prod` (2026-10-15): 3 advisories, all in the Prisma CLI's dependencies (`deepmerge-ts` < 8, `mysql2`
+  < 3.23.1). Not on the request path; see docs/SECURITY.md item 37.
+- Prettier on an existing file reformats unrelated lines and can move `@ts-expect-error` comments off their target
+  (it broke `src/audit/audit.test.ts` once). Format new files only.
+- Unverified, pending the sandbox runs: which hosts serve Epic's and Oracle Health's id_token issuer and JWKS (Phase 6
+  trusts the FHIR server's and the token endpoint's origins), whether either sandbox frames the app (and from which
+  origin; Oracle's code console is from memory `https://code-console.cerner.com`), and whether `fhirUser` is absolute.

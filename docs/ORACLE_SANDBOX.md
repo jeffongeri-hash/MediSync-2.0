@@ -57,6 +57,7 @@ Reads `{iss}/metadata` and writes `docs/reports/phase5-writeback-oracle-sandbox.
 ## What to send back
 
 - The **Read at launch** table for both launches, or the error shown on `/smart`.
+- The **User** and **Role** lines of the launch banner (Phase 6 verifies the id_token).
 - The two report files above (committed), or the `smart:capability` error.
 - The iss the console showed, if it differs from the one above, and anything the screens did differently.
 
@@ -70,3 +71,4 @@ Same error table as docs/EPIC_SANDBOX.md. Oracle-specific things to check first 
 | declined the request (`invalid_scope`) | a default scope is not granted to the registration, e.g. `patient/Medication.read`; set `SMART_ORACLE_SCOPE` to the granted read scopes (or `user/<Type>.read` for provider apps) |
 | could not read the SMART configuration | `.well-known/smart-configuration` unreachable, or S256 not advertised (PKCE is required) |
 | a query shows failed in the Read table | that search needs a parameter or type Oracle does not support; the rest of the record still loads |
+| User: not verified (id_token: …), Role: viewer | the id_token failed the Phase 6 check and the launch is read-only. Its issuer and JWKS must be on the FHIR server's host or the token endpoint's (authorization.cerner.com); send the reason back |

@@ -27,7 +27,7 @@ Side-by-side reconcile UI: incoming vs. current chart (meds, problems, allergies
 EHR launch + standalone launch, OAuth2/PKCE, scopes, patient context, fetch via sandbox test patients, for Epic and for Oracle Health (Cerner) Millennium. Embed the Phase 4 UI in the launch flow. Document what write-back each sandbox allows. Gate: launched from each sandbox with a test patient, read plus review flow working.
 
 ## Phase 6: Hardening
-Role-based access, encryption at rest, audit export, rate limits, error handling, a10y pass, security checklist, README for Epic review prep.
+Role-based access, encryption at rest, audit export, rate limits, error handling, a11y pass, security checklist, README for Epic and Oracle Health review prep. Gate: docs/SECURITY.md checklist with every item done, tested or deferred-with-reason; axe-core finds no serious or critical issues on any page; tests green for roles, rate limits, audit export, tamper evidence and no PHI in logs; README review section written; CI green.
 
 ---
 

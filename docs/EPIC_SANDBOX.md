@@ -59,6 +59,7 @@ Reads `{iss}/metadata` (public) and writes `docs/reports/phase5-writeback-epic-s
 ## What to send back
 
 - The **Read at launch** table (query, ok/failed, counts) for both launches, or the error shown on `/smart`.
+- The **User** and **Role** lines of the launch banner (Phase 6 verifies the id_token; see the table below).
 - The two report files above (committed), or the `smart:capability` error.
 - Anything Epic's screens did differently from this page.
 
@@ -74,6 +75,8 @@ Reads `{iss}/metadata` (public) and writes `docs/reports/phase5-writeback-epic-s
 | code could not be exchanged | token endpoint refused the code or verifier |
 | no patient context | no `patient` in the token response (standalone: no patient picked) |
 | record could not be read | the Patient read failed; per-query failures appear in the Read table instead |
+| User: not verified (id_token: …), Role: viewer, no **Start reconciliation** | the id_token failed the Phase 6 check, so the launch is read-only. `issuer`: its iss or JWKS is on a host other than the FHIR server and token endpoint; `discovery`: `{iss}/.well-known/openid-configuration` unreachable; `missing`: no `openid fhirUser` granted. Send the reason back |
+| Role: viewer for a provider | the fhirUser is not a Practitioner or PractitionerRole; grant the role: `pnpm roles grant <smart:fhirUser> provider` |
 
 ## Local mock (no Epic)
 
