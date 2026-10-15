@@ -41,3 +41,11 @@ Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient
 - Every mapping is a pure function with unit tests and a fixture.
 - Terminology: SNOMED (problems), RxNorm (meds), LOINC (labs), ICD-10 (dx). Unmapped codes go to a review queue, never silently dropped.
 - Folder layout: `src/ingest`, `src/canonical`, `src/mapping`, `src/export`, `src/reconcile`, `src/ai`, `src/smart`, `src/audit`, `app/`.
+
+## Project skills
+Claude Code loads `.claude/skills/<name>/SKILL.md`. These copies are upstream files, not app logic.
+
+- **apple-design** — `.claude/skills/apple-design/` from [emilkowalski/skills](https://github.com/emilkowalski/skills). Fluid, Apple-style web UI.
+- **ponytail** — `.claude/skills/ponytail/` plus `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-help` from [DietrichGebert/ponytail](https://github.com/DietrichGebert/ponytail). Smallest change that works.
+- **pstack** — `.claude/skills/pstack/<skill>/` from [michael-denyer/pstack-claude](https://github.com/michael-denyer/pstack-claude) (`plugins/pstack/skills`). Each skill is linked at `.claude/skills/<skill>/` so Claude Code discovers it. Notices: `.claude/skills/pstack/NOTICE-skills.md`.
+- **Anthropic example skills** — `.claude/skills/<name>/` from [anthropics/skills](https://github.com/anthropics/skills): algorithmic-art, brand-guidelines, canvas-design, doc-coauthoring, frontend-design, internal-comms, mcp-builder, skill-creator, slack-gif-creator, theme-factory, web-artifacts-builder, webapp-testing. Document skills (`docx`, `pdf`, `pptx`, `xlsx`) are not vendored; their LICENSE.txt forbids redistributing copies outside Anthropic services.
