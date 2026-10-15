@@ -32,7 +32,9 @@
     "mock:smart": "tsx scripts/mock-smart.ts",
     "smart:capability": "tsx scripts/smart-capability.ts",
     "roles": "tsx scripts/roles.ts",
-    "crypt:rotate": "tsx scripts/crypt-rotate.ts"
+    "crypt:rotate": "tsx scripts/crypt-rotate.ts",
+    "audit:verify": "tsx scripts/audit.ts verify",
+    "audit:export": "tsx scripts/audit.ts export"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

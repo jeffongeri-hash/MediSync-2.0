@@ -196,6 +196,10 @@ model AuditLog {
   entityId   String?     @map("entity_id")
   source     String?
   details    Json?
+  /// Hash chain (Phase 6), set by the insert trigger: hash = sha256 over prev_hash and this row's fields, so an
+  /// edited, removed or reordered row breaks every later link (`pnpm audit:verify`). Never written by the app.
+  prevHash   String?     @map("prev_hash")
+  hash       String      @default("")
 
   @@index([patientId, occurredAt])
   @@index([occurredAt])

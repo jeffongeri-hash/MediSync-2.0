@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { NextRequest } from "next/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { templateResponder } from "@/ai/responders";
+import { recordAudit } from "@/audit";
+import { verifyAuditLog, verifyChain, type AuditRow } from "@/audit/chain";
 import { createDb } from "@/db";
 import { resolvePatient } from "@/export/run";
 import { seedSynthea } from "@/ingest/seed";
@@ -17,6 +19,7 @@ import { createSession, SESSION_COOKIE } from "@/smart/session";
 import { POST as transferPost } from "../../app/api/transfer/route";
 import { GET as transferGet } from "../../app/api/transfer/[id]/route";
 import { GET as writebackGet } from "../../app/smart/writeback/[runId]/route";
+import { GET as auditGet } from "../../app/api/admin/audit/route";
 
 const ISS = "https://security-test.invalid/fhir";
 const PRACTITIONER = `${ISS}/Practitioner/sec-1`;
@@ -190,4 +193,78 @@ describe.skipIf(!process.env.DATABASE_URL)("roles and access (database)", () => 
       expect((await rotateSealed(db)).sourceRecords).toBe(0);
     },
   );
+
+  it("chains every audit entry, including rows written together and concurrently", async () => {
+    await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        recordAudit(db, [
+          { actor: "test:chain", action: "READ", entityType: "Test", entityId: `c${i}a` },
+          { actor: "test:chain", action: "READ", entityType: "Test", entityId: `c${i}b` },
+        ]),
+      ),
+    );
+    expect(await verifyAuditLog(db)).toMatchObject({ verified: true, broken: null });
+  });
+
+  it("detects an edited or a deleted audit row (tampered in a rolled-back transaction)", async () => {
+    class Rollback extends Error {}
+    const [r1, r2, r3] = await db.auditLog.findMany({
+      orderBy: { id: "asc" },
+      take: 3,
+      select: { id: true },
+    });
+    const found: unknown[] = [];
+    for (const sql of [
+      `UPDATE audit_log SET actor = 'smart:forged' WHERE id = ${r1!.id}`,
+      `DELETE FROM audit_log WHERE id = ${r2!.id}`,
+    ]) {
+      await expect(
+        db.$transaction(
+          async (tx) => {
+            await tx.$executeRawUnsafe(
+              "ALTER TABLE audit_log DISABLE TRIGGER audit_log_no_update_delete",
+            );
+            await tx.$executeRawUnsafe(sql);
+            found.push((await verifyAuditLog(tx)).broken);
+            throw new Rollback();
+          },
+          { timeout: 60_000 },
+        ),
+      ).rejects.toBeInstanceOf(Rollback);
+    }
+    expect(found).toEqual([
+      { id: String(r1!.id), reason: "hash" },
+      { id: String(r3!.id), reason: "prev_hash" },
+    ]);
+    expect((await verifyAuditLog(db)).verified).toBe(true);
+  });
+
+  it("exports the audit log to admins only, verified, and audits the export", async () => {
+    const get = (token?: string, q = "") => auditGet(req(`/api/admin/audit${q}`, token));
+    expect((await get()).status).toBe(401);
+    expect((await get(await session(PRACTITIONER, a))).status).toBe(403);
+    const admin = `${ISS}/Practitioner/sec-admin`;
+    await grantRole(db, { actor: `smart:${admin}`, role: "ADMIN", by: "test:security" });
+    const token = await session(admin, a);
+    expect((await get(token, "?from=yesterday")).status).toBe(400);
+    const from = new Date(Date.now() - 3_600_000).toISOString();
+    const res = await get(token, `?from=${encodeURIComponent(from)}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("x-audit-chain")).toBe("verified");
+    const lines = (await res.text())
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as AuditRow & { chain?: { verified: boolean } });
+    expect(lines.at(-1)!.chain).toMatchObject({ verified: true, broken: null });
+    const rows = lines.slice(0, -1);
+    expect(rows.some((r) => r.entityType === "UserRole" && r.entityId === `smart:${admin}`)).toBe(
+      true,
+    );
+    expect(verifyChain(rows, rows[0]?.prevHash ?? null).verified).toBe(true);
+    const logged = await db.auditLog.findFirst({
+      where: { actor: `smart:${admin}`, action: "EXPORT", entityType: "AuditLog" },
+      orderBy: { id: "desc" },
+    });
+    expect(logged?.details).toMatchObject({ verified: true, from });
+  });
 });
