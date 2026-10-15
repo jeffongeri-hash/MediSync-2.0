@@ -88,6 +88,24 @@ describe("id_token verification", () => {
     expect(await check(undefined)).toEqual({ ok: false, reason: "missing" });
   });
 
+  it("also trusts the token endpoint's origin, where the authorization server lives", async () => {
+    const auth = "https://auth.example/tenant/oidc";
+    const fetchAuth: FetchJson = async (url) => {
+      if (url === `${auth}/.well-known/openid-configuration`)
+        return { issuer: auth, jwks_uri: "https://auth.example/jwks" };
+      if (url === "https://auth.example/jwks") return jwks;
+      throw new Error(`unexpected fetch ${url}`);
+    };
+    const token = jwt({ iss: auth });
+    const opts = { iss: ISS, clientId: "client-1", fetchJson: fetchAuth, now: NOW };
+    expect(
+      await verifyIdToken(token, { ...opts, tokenUri: "https://auth.example/token" }),
+    ).toMatchObject({
+      ok: true,
+    });
+    expect(await verifyIdToken(token, opts)).toEqual({ ok: false, reason: "issuer" });
+  });
+
   it("only trusts discovery and keys on the SMART server's own origin", async () => {
     expect(await check(jwt({ iss: "https://evil.example/oauth2" }))).toEqual({
       ok: false,

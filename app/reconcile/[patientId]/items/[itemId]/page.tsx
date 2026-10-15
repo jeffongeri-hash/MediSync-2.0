@@ -6,6 +6,7 @@ import { recordAudit } from "@/audit";
 import { getDb } from "@/db";
 import type { ReconRow } from "@/reconcile/rows";
 import { RECONCILE_SOURCE } from "@/reconcile/run";
+import { allows, Role } from "@/security/roles";
 import { patientAccess } from "@/smart/next";
 import { decide } from "../../../actions";
 
@@ -72,6 +73,7 @@ export default async function EditItemPage({
         </p>
       </header>
       {error ? <p className="notice">{error}</p> : null}
+      {allows(access.role, Role.PROVIDER) ? (
       <form action={decide}>
         <input type="hidden" name="patientId" value={patientId} />
         <input type="hidden" name="runId" value={item.run.id} />
@@ -99,6 +101,11 @@ export default async function EditItemPage({
           Save edited copy
         </button>
       </form>
+      ) : (
+        <p className="notice">
+          You can read this line. Saving an edited copy needs the provider role.
+        </p>
+      )}
     </main>
   );
 }

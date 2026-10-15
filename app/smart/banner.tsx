@@ -28,7 +28,8 @@ export function LaunchBanner({
         </dd>
         <dt>User</dt>
         <dd className="mono">
-          {session.fhirUser ?? "not verified (no valid id_token), so read-only"}
+          {session.fhirUser ??
+            `not verified (id_token: ${(session.fetchSummary as { idToken?: string } | null)?.idToken ?? "none"}), so read-only`}
         </dd>
         {role ? (
           <>

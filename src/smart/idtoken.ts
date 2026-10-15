@@ -1,7 +1,8 @@
 // id_token verification (Phase 6; Phase 5 read the claims unchecked). The token endpoint's id_token is checked as
 // OIDC Core 3.1.3.7 describes: an RS256 or ES256 signature against the issuer's JWKS (found through
 // {iss}/.well-known/openid-configuration), iss, aud = our client id, exp and iat. Discovery and keys are fetched only
-// from the SMART server's own origin. A launch whose id_token fails keeps going without a user, which makes it
+// from the SMART server's origin or its token endpoint's (Oracle Health authorizes on another host than its FHIR
+// server). A launch whose id_token fails keeps going without a user, which makes it
 // read-only (viewer); the reason code is kept in the session's fetch summary.
 import { createPublicKey, verify, type JsonWebKey } from "node:crypto";
 import { z } from "zod";
@@ -35,11 +36,11 @@ const jwks = z.object({
 
 const json = (part: string) =>
   JSON.parse(Buffer.from(part, "base64url").toString("utf8")) as unknown;
-const sameOrigin = (url: string, iss: string) => {
+const originOf = (url: string) => {
   try {
-    return new URL(url).origin === new URL(iss).origin;
+    return new URL(url).origin;
   } catch {
-    return false;
+    return null;
   }
 };
 // A FHIR reference to the user: absolute, or relative to the server (resolved, so ids from two EHRs never collide).
@@ -48,7 +49,7 @@ const FHIR_USER =
 
 export async function verifyIdToken(
   token: unknown,
-  opts: { iss: string; clientId: string; fetchJson: FetchJson; now?: Date },
+  opts: { iss: string; tokenUri?: string; clientId: string; fetchJson: FetchJson; now?: Date },
 ): Promise<IdTokenCheck> {
   if (typeof token !== "string" || !token) return { ok: false, reason: "missing" };
   const parts = token.split(".");
@@ -62,17 +63,24 @@ export async function verifyIdToken(
     return { ok: false, reason: "malformed" };
   }
   if (h.alg !== "RS256" && h.alg !== "ES256") return { ok: false, reason: "alg" };
-  if (!sameOrigin(c.iss, opts.iss)) return { ok: false, reason: "issuer" };
+  const trusted = new Set(
+    [opts.iss, opts.tokenUri].flatMap((u) => {
+      const o = u ? originOf(u) : null;
+      return o ? [o] : [];
+    }),
+  );
+  const onTrusted = (url: string) => {
+    const o = originOf(url);
+    return o !== null && trusted.has(o);
+  };
+  if (!onTrusted(c.iss)) return { ok: false, reason: "issuer" };
 
   let keys: z.infer<typeof jwks>["keys"];
   try {
     const d = discovery.parse(
       await opts.fetchJson(`${c.iss.replace(/\/+$/, "")}/.well-known/openid-configuration`),
     );
-    if (
-      d.issuer.replace(/\/+$/, "") !== c.iss.replace(/\/+$/, "") ||
-      !sameOrigin(d.jwks_uri, opts.iss)
-    )
+    if (d.issuer.replace(/\/+$/, "") !== c.iss.replace(/\/+$/, "") || !onTrusted(d.jwks_uri))
       return { ok: false, reason: "issuer" };
     keys = jwks.parse(await opts.fetchJson(d.jwks_uri)).keys;
   } catch {

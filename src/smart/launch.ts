@@ -147,6 +147,7 @@ export async function completeLaunch(
     serverUrl?: string;
     scope?: string;
     tokenResponse?: Record<string, unknown>;
+    tokenUri?: string;
   };
   if (!state.tokenResponse?.access_token) throw new LaunchError("token_failed");
   if (normalizeIss(state.serverUrl ?? "") !== session.iss) throw new LaunchError("state_mismatch");
@@ -156,6 +157,7 @@ export async function completeLaunch(
   // Only a verified id_token names the user; without one the launch is read-only (see idtoken.ts).
   const idToken = await verifyIdToken(state.tokenResponse.id_token, {
     iss: session.iss,
+    tokenUri: state.tokenUri,
     clientId: server.clientId,
     fetchJson: deps.fetchJson ?? fetchJson,
     now: deps.now?.(),

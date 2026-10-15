@@ -3,7 +3,7 @@ import { cookies, headers } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
 import { getDb } from "@/db";
 import { errorClass, log } from "@/log";
-import { accessFor, type Access } from "@/security/access";
+import { accessFor, requestSession, type Access } from "@/security/access";
 import { hit, limitRequest, RULES, subjectOf, type Rule } from "@/security/ratelimit";
 import { smartConfig, SmartConfigError, type LaunchKind } from "@/smart/config";
 import { beginLaunch, completeLaunch, LaunchError } from "@/smart/launch";
@@ -50,7 +50,9 @@ export async function launchRoute(req: NextRequest, kind: LaunchKind): Promise<R
 
 /** GET /smart/callback: the authorization server's redirect back (code + state, or error). */
 export async function callbackRoute(req: NextRequest): Promise<Response> {
-  const limited = await limitRequest(getDb(), RULES.launch, null, req);
+  // Counted per launch session, so clinicians behind one hospital IP spend the per-IP budget only on launches.
+  const db = getDb();
+  const limited = await limitRequest(db, RULES.launch, await requestSession(db, req), req);
   if (limited) return limited;
   let base = req.nextUrl.origin;
   try {
