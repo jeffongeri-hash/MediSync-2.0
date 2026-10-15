@@ -3,7 +3,7 @@
   --paper: #f4f6f9;
   --surface: #ffffff;
   --ink: #141b27;
-  --muted: #5a6474;
+  --muted: #3d4a5c;
   --rule: #d9dfe8;
   --accent: #2350a0; /* ballpoint chart ink */
   --accent-soft: #e3eaf7;
@@ -33,7 +33,7 @@
     --paper: #0e131b;
     --surface: #151c27;
     --ink: #e4e9f1;
-    --muted: #97a2b4;
+    --muted: #b7c3d6;
     --rule: #263042;
     --accent: #93b4ef;
     --accent-soft: #1b2944;
@@ -54,7 +54,7 @@
   --paper: #0e131b;
   --surface: #151c27;
   --ink: #e4e9f1;
-  --muted: #97a2b4;
+  --muted: #b7c3d6;
   --rule: #263042;
   --accent: #93b4ef;
   --accent-soft: #1b2944;
@@ -104,7 +104,8 @@ h2 {
 h1 {
   font-size: var(--step-3);
   font-weight: 700;
-  line-height: 1.15;
+  line-height: 1.12;
+  letter-spacing: -0.022em;
 }
 h2 {
   font-size: var(--step-1);
@@ -178,6 +179,12 @@ a {
   border-radius: var(--radius);
   font-weight: 600;
   text-decoration: none;
+  transition: transform 100ms ease-out;
+}
+.button:active,
+.decide button:active,
+.button-quiet:active {
+  transform: scale(0.97);
 }
 
 /* Status pills: state is carried by shape and label as well as color. */
@@ -270,6 +277,10 @@ a {
   background: var(--surface);
   border: 1px solid var(--rule);
   border-radius: var(--radius);
+}
+.table-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .ledger {
   width: 100%;
@@ -395,9 +406,74 @@ a {
   max-width: 65ch;
 }
 
+.skip {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+.skip:focus {
+  position: fixed;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip: auto;
+  padding: 0.5rem 0.8rem;
+  background: var(--accent);
+  color: var(--surface);
+  border-radius: var(--radius);
+}
+.sign-out {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 0.75rem 16px 0;
+  display: flex;
+  justify-content: flex-end;
+}
+.sign-in {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 24rem;
+}
+.sign-in input {
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;
+  }
+  .button,
+  .decide button,
+  .button-quiet {
+    transition: none;
+  }
+  .button:active,
+  .decide button:active,
+  .button-quiet:active {
+    transform: none;
+    opacity: 0.72;
+  }
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --muted: var(--ink);
+    --rule: var(--ink);
   }
 }
 

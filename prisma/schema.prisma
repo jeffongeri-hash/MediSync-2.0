@@ -220,7 +220,7 @@ model TransferJob {
   summary           Json?
   /// Human-readable fidelity report (Markdown).
   report            String?
-  /// The exported bundle as serialized (exact bytes the hash covers). Null for a dry run.
+  /// Export bundle sealed with AES-256-GCM (enc1:). Null for a dry run. Hash and byte length are of the plaintext.
   bundle            String?
   bundleSha256      String?        @map("bundle_sha256")
   bundleBytes       Int?           @map("bundle_bytes")

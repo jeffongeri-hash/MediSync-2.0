@@ -19,7 +19,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Public+Sans:wght@400;500;600;700&display=swap"
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <a className="skip" href="#content">
+          Skip to content
+        </a>
+        <div id="content">{children}</div>
+      </body>
     </html>
   );
 }

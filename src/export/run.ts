@@ -6,6 +6,7 @@ import type { CanonicalResource, CanonicalType } from "@/canonical";
 import { MAPPING_VERSION } from "@/mapping/map-resource";
 import { replaceIssues } from "@/mapping/run";
 import { renderFidelityReport, summarize, type OpenIssueCount } from "@/export/report";
+import { sealAtRest } from "@/security/at-rest";
 import { planTransfer, type ExportRow } from "@/export/transfer";
 import { TARGET_PROFILE } from "@/export/us-core";
 
@@ -239,7 +240,7 @@ export async function runTransfer(
               blockers: plan.blockers.length,
             },
             report: result.report,
-            bundle: result.bundleText,
+            bundle: result.bundleText ? sealAtRest(result.bundleText) : null,
             bundleSha256: result.bundleSha256,
             bundleBytes: result.bundleText ? Buffer.byteLength(result.bundleText) : null,
             error: result.error,

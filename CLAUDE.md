@@ -1,10 +1,12 @@
 # MediSync: EHR Transfer + Record Reconciliation
 
 Goal: a SMART on FHIR app that lives inside Epic, with two capabilities:
+
 1. Cross-EHR patient record transfer (ingest, normalize, map, validate, export).
 2. Outside-record reconciliation (PMH, meds, allergies, problems) with AI summarization and provider accept/reject.
 
 ## Hard rules (read first, always)
+
 - SYNTHETIC DATA ONLY. Never use, request, or commit real PHI. Use Synthea + Epic sandbox test patients.
 - No secrets in the repo. Use .env (gitignored) and .env.example.
 - AI output is a suggestion. Nothing writes to a chart without explicit provider accept. Every AI claim must cite its source record id.
@@ -12,9 +14,11 @@ Goal: a SMART on FHIR app that lives inside Epic, with two capabilities:
 - Original products only. Do not copy Doximity or DrFirst UI, branding, or code. Match the workflow value, not the look.
 
 ## Stack (decided, do not re-debate)
+
 Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient` for SMART launch, Vitest + Playwright, Anthropic SDK for summarization/mapping assist.
 
 ## Token-saving protocol (follow strictly)
+
 - Work in PHASES from docs/BUILD_PLAN.md. Do ONE phase per session. Stop at the phase gate and wait.
 - Plan before code: for each phase, write a <=15-line plan, wait for my "go", then implement.
 - Do not re-read files you just wrote. Do not dump whole files into chat. Use Grep/Glob with narrow patterns, and Read with offset/limit.
@@ -26,6 +30,7 @@ Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient
 - When uncertain about requirements, ask ONE batched question, not several round trips.
 
 ## Commands
+
 - Setup: `cp .env.example .env`, `pnpm install`, `pnpm db:deploy`, `pnpm db:seed`
 - `pnpm dev` (app at :3000, demo at /demo, reconcile at /reconcile) · `pnpm build`
 - `pnpm test` (Vitest; DB tests need DATABASE_URL) · `pnpm test:e2e` (Playwright) · `pnpm lint` · `pnpm typecheck`
@@ -34,15 +39,18 @@ Next.js (App Router) + TypeScript, Postgres (Supabase), Prisma, Zod, `fhirclient
 - `pnpm ingest:report [out.md]` (per-patient issue report) · `pnpm demo:snapshot [baseUrl] [out]` (static /demo copy)
 - `pnpm map [--all]` (mapping + dedupe pass; db:seed runs it) · `pnpm mapping:report [out.md]` (coverage report)
 - `pnpm transfer <patient> [--dry-run] [--out dir] [--report file] [--at instant]` (US Core bundle + fidelity report; `exports/` is gitignored) · API: `POST /api/transfer`, `GET /api/transfer/:id`
+- `pnpm audit:export` (NDJSON of audit_log; no clinical text) · API: `GET /api/audit`
 - `pnpm eval` (replay recorded Claude answers) · `--live` (needs ANTHROPIC_API_KEY; re-records) · `--template` (no AI) · `--cases a,b` · `--prompts dir` (dump prompts, send nothing) · `--strict` · `--out file` · `pnpm eval:build` (rebuild fixtures/eval from the DB)
 
 ## Conventions
+
 - Canonical internal model = FHIR R4 resources validated with Zod. All sources map INTO it; all exports map OUT of it.
 - Every mapping is a pure function with unit tests and a fixture.
 - Terminology: SNOMED (problems), RxNorm (meds), LOINC (labs), ICD-10 (dx). Unmapped codes go to a review queue, never silently dropped.
 - Folder layout: `src/ingest`, `src/canonical`, `src/mapping`, `src/export`, `src/reconcile`, `src/ai`, `src/smart`, `src/audit`, `app/`.
 
 ## Project skills
+
 Claude Code loads `.claude/skills/<name>/SKILL.md`. These copies are upstream files, not app logic.
 
 - **apple-design** — `.claude/skills/apple-design/` from [emilkowalski/skills](https://github.com/emilkowalski/skills). Fluid, Apple-style web UI.

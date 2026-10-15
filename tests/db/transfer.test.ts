@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDb } from "@/db";
 import { sha256, transactionBundleSchema } from "@/export/bundle";
 import { PatientNotFoundError, runTransfer } from "@/export/run";
+import { openAtRest } from "@/security/at-rest";
 import { SYNTHEA_SOURCE, seedSynthea } from "@/ingest/seed";
 import { runMapping } from "@/mapping/run";
 
@@ -13,10 +14,12 @@ describe.skipIf(!process.env.DATABASE_URL)("transfer jobs (database)", () => {
   const GATE_PATIENT = "c4a5ef89-933c-c428-8fa7-4a26d9f621a9"; // Synthea seed 3: allergies, Medication refs, open warnings
   const AT = new Date("2026-10-11T00:00:00Z");
   const actor = "test:transfer";
+  const previousKey = process.env.MEDISYNC_DATA_KEY;
   let patientId: string;
   let familyName: string;
 
   beforeAll(async () => {
+    process.env.MEDISYNC_DATA_KEY = Buffer.alloc(32, 7).toString("base64");
     await seedSynthea(db, join(process.cwd(), "fixtures/synthea"));
     await runMapping(db, { actor });
     const patient = await db.patient.findFirstOrThrow({
@@ -28,7 +31,11 @@ describe.skipIf(!process.env.DATABASE_URL)("transfer jobs (database)", () => {
     });
     familyName = (row.resource as { name: { family: string }[] }).name[0]!.family;
   }, 180_000);
-  afterAll(() => db.$disconnect());
+  afterAll(() => {
+    if (previousKey === undefined) delete process.env.MEDISYNC_DATA_KEY;
+    else process.env.MEDISYNC_DATA_KEY = previousKey;
+    return db.$disconnect();
+  });
 
   it("exports one patient end to end: stored, hashed, valid bundle with one Provenance per resource", async () => {
     const r = await runTransfer(db, { patientId, actor, exportedAt: AT });
@@ -41,14 +48,16 @@ describe.skipIf(!process.env.DATABASE_URL)("transfer jobs (database)", () => {
       requestedBy: actor,
     });
     expect(job.finishedAt).not.toBeNull();
-    expect(job.bundle).toBe(r.bundleText);
-    expect(job.bundleSha256).toBe(sha256(job.bundle!));
-    expect(job.bundleBytes).toBe(Buffer.byteLength(job.bundle!));
+    expect(job.bundle!.startsWith("enc1:")).toBe(true);
+    expect(openAtRest(job.bundle!)).toBe(r.bundleText);
+    expect(job.bundle).not.toContain(familyName);
+    expect(job.bundleSha256).toBe(sha256(r.bundleText!));
+    expect(job.bundleBytes).toBe(Buffer.byteLength(r.bundleText!));
 
     const primaries = await db.canonicalResource.count({
       where: { patientId, duplicateOfId: null },
     });
-    const bundle = transactionBundleSchema.parse(JSON.parse(job.bundle!));
+    const bundle = transactionBundleSchema.parse(JSON.parse(r.bundleText!));
     const types = bundle.entry.map((e) => e.resource.resourceType);
     expect(job.resourcesSelected).toBe(primaries);
     expect(job.resourcesExcluded).toBe(0);

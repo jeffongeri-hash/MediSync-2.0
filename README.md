@@ -3,9 +3,10 @@
 A SMART on FHIR app for Epic that transfers patient records between EHRs and reconciles outside records
 (meds, problems, allergies, PMH), with AI suggestions a provider must accept. **Synthetic data only.**
 
-Status: Phase 0 (scaffold, schema, Synthea seed, intake demo). See `docs/BUILD_PLAN.md`.
+Status: Phase 6 (access, bundle encryption, audit export, rate limits). See `docs/BUILD_PLAN.md`.
 
 ## Quick start
+
 Needs Node 22, pnpm 10 and Postgres 16.
 
 ```sh
@@ -16,9 +17,16 @@ pnpm dev                  # http://localhost:3000/demo
 pnpm test
 ```
 
-More commands are in `CLAUDE.md`. Design decisions are in `docs/DECISIONS.md`, and findings are in `docs/NOTES.md`.
+More commands are in `CLAUDE.md`. Design decisions are in `docs/DECISIONS.md`, findings are in `docs/NOTES.md`, and the security controls are in `docs/SECURITY.md`.
+
+## Epic review prep
+
+MediSync is a sandbox SMART on FHIR app. It transfers a synthetic chart as a US Core bundle and reconciles outside medications, problems, allergies, and past history. A provider accepts, rejects, or edits each line. Those decisions are audited. They are not written to the chart, and the app does not call an Epic write API.
+
+Production listing (Showroom, formerly App Orchard) is not started. Before any real patient data, set the three access tokens and `MEDISYNC_DATA_KEY` from `.env.example`, turn on disk encryption for Postgres, and have a BAA with every vendor that would see the data, including Anthropic if a summary is sent to Claude. `docs/SECURITY.md` is the checklist: roles, bundle encryption, audit export, rate limits, and what errors return.
 
 ## Claude skills
+
 Project skills live in `.claude/skills/`. Claude Code loads each `<name>/SKILL.md`.
 
 - **apple-design** — `.claude/skills/apple-design/` ([emilkowalski/skills](https://github.com/emilkowalski/skills))
