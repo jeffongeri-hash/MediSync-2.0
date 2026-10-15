@@ -86,13 +86,22 @@ export class SessionStorage {
   }
 }
 
-/** Set-Cookie value. Lax so the authorization server's top-level redirect back to the callback carries it. */
-export function sessionCookie(token: string, secure: boolean, maxAgeMs = SESSION_TTL_MS): string {
+/**
+ * Set-Cookie value. Lax so the authorization server's top-level redirect back to the callback carries it. An EHR
+ * that opens the app in a cross-site iframe needs SESSION_COOKIE_SAMESITE=none, which only takes effect over HTTPS.
+ */
+export function sessionCookie(
+  token: string,
+  secure: boolean,
+  maxAgeMs = SESSION_TTL_MS,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const none = secure && env.SESSION_COOKIE_SAMESITE?.trim().toLowerCase() === "none";
   return [
     `${SESSION_COOKIE}=${token}`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    none ? "SameSite=None" : "SameSite=Lax",
     `Max-Age=${Math.floor(maxAgeMs / 1000)}`,
     ...(secure ? ["Secure"] : []),
   ].join("; ");

@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+// Rendered per request so every page carries the CSP nonce from proxy.ts (static pages would have none).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "MediSync",
   description: "Cross-EHR record transfer and outside-record reconciliation. Synthetic data only.",

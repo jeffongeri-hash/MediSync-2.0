@@ -50,7 +50,10 @@ const httpUrl = z.url({ protocol: /^https?$/ });
 const SERVER_NAME = /^[a-z][a-z0-9-]{0,19}$/;
 
 /** SMART_<NAME>_<FIELD> for a server name ("oracle" -> SMART_ORACLE_ISS). */
-export const serverVar = (name: string, field: "ISS" | "CLIENT_ID" | "SCOPE") =>
+export const serverVar = (
+  name: string,
+  field: "ISS" | "CLIENT_ID" | "SCOPE" | "FRAME_ANCESTORS",
+) =>
   `SMART_${name.toUpperCase().replace(/-/g, "_")}_${field}`;
 
 const scopes = (v: string | undefined) =>
