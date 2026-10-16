@@ -29,6 +29,9 @@ EHR launch + standalone launch, OAuth2/PKCE, scopes, patient context, fetch via 
 ## Phase 6: Hardening
 Role-based access, encryption at rest, audit export, rate limits, error handling, a11y pass, security checklist, README for Epic and Oracle Health review prep. Gate: docs/SECURITY.md checklist with every item done, tested or deferred-with-reason; axe-core finds no serious or critical issues on any page; tests green for roles, rate limits, audit export, tamper evidence and no PHI in logs; README review section written; CI green.
 
+## Phase 7: Trial run (test it out)
+Use the app end to end the way a clinic would, with synthetic data only, and fix what breaks. Live Claude first: a one-case smoke test, then `pnpm eval --live` on the 20 cases (pass rate; every failing case triaged; prompt changes only with a re-run). Then a scripted trial of a production build (`next start`, DEMO_MODE off, DATA_KEYS set) against the mock SMART servers: launch as provider, viewer and admin; reconcile with the Claude summary; accept, reject and edit; transfer; write-back download; audit export and verify; rate-limit and error paths. Every bug found gets a failing test before its fix. The Epic and Oracle Health sandbox runs stay manual (docs/EPIC_SANDBOX.md, docs/ORACLE_SANDBOX.md) and are not part of this gate. Gate: docs/reports/phase7-trial.md (each step: expected, seen, pass or fail, screenshot) with no open failures; live eval pass rate reported with every failing case explained; tests and CI green.
+
 ---
 
 ## Prompt to paste into Claude Code (Phase 0 start)
