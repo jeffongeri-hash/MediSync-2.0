@@ -1,7 +1,8 @@
 // TEST-ONLY mock of a SMART on FHIR server: discovery, an auto-approving authorization endpoint (PKCE S256 enforced),
 // a token endpoint, a simulated EHR launcher, and a read-only FHIR API over synthetic Synthea patients. It stands in
 // for the Epic and Oracle Health sandboxes, which this build container cannot reach. Its CapabilityStatement is a
-// fixture written for tests; it says nothing about what any EHR supports.
+// fixture written for tests; it says nothing about what any EHR supports. As a receiving EHR (Phase 7) it also takes
+// a FHIR transaction at POST /fhir, unauthenticated because it is a loopback test double, never a real target.
 import { createHash, generateKeyPairSync, randomBytes, sign } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -30,6 +31,8 @@ export type MockSmartOptions = {
   failTypes?: string[];
   /** "forged": the id_token is signed with a key the JWKS does not publish (default "signed"). */
   idToken?: "signed" | "forged";
+  /** POST /fhir transactions answer 500 (to test a failed delivery). */
+  failTransactions?: boolean;
 };
 
 export type MockSmart = {
@@ -42,6 +45,8 @@ export type MockSmart = {
   denyNext(): void;
   /** Request log: method, path (no query) and status, for assertions. */
   requests: { method: string; path: string; status: number; auth: boolean }[];
+  /** Transactions taken at POST /fhir, with this server's ids and resolved references. */
+  received: { patientId: string | null; resources: Resource[] }[];
   close(): Promise<void>;
 };
 
@@ -163,8 +168,14 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
   const tokens = new Map<string, { scope: string; patient?: string; expires: number }>();
   // id_tokens are RS256, verifiable through /.well-known/openid-configuration and /oauth2/jwks.
   const signing = generateKeyPairSync("rsa", { modulusLength: 2048 });
-  const forged = opts.idToken === "forged" ? generateKeyPairSync("rsa", { modulusLength: 2048 }) : null;
-  const jwk = { ...signing.publicKey.export({ format: "jwk" }), kid: "mock-1", alg: "RS256", use: "sig" };
+  const forged =
+    opts.idToken === "forged" ? generateKeyPairSync("rsa", { modulusLength: 2048 }) : null;
+  const jwk = {
+    ...signing.publicKey.export({ format: "jwk" }),
+    kid: "mock-1",
+    alg: "RS256",
+    use: "sig",
+  };
   const requests: MockSmart["requests"] = [];
   let deny = false;
   let base = "";
@@ -360,6 +371,81 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
     });
   }
 
+  // Receiving EHR: one transaction of POST entries, applied all or nothing. Ids are this server's own; references to
+  // the bundle's urn:uuid fullUrls become "Type/id". The new Patient's record is then readable like the seeded ones.
+  const received: MockSmart["received"] = [];
+  let nextId = 1;
+  async function transaction(req: IncomingMessage, res: ServerResponse) {
+    if (opts.failTransactions) return send(res, 500, outcome("exception", "simulated failure"));
+    let bundle: { resourceType?: string; type?: string; entry?: unknown };
+    try {
+      bundle = JSON.parse(await readBody(req));
+    } catch {
+      return send(res, 400, outcome("structure", "body is not JSON"));
+    }
+    type Entry = {
+      fullUrl?: string;
+      resource?: Resource;
+      request?: { method?: string; url?: string };
+    };
+    const entries = Array.isArray(bundle.entry) ? (bundle.entry as Entry[]) : [];
+    if (bundle.resourceType !== "Bundle" || bundle.type !== "transaction" || !entries.length)
+      return send(res, 400, outcome("invalid", "expected a transaction Bundle with entries"));
+    const malformed = entries.some(
+      (e) =>
+        !e.fullUrl ||
+        !e.resource?.resourceType ||
+        e.request?.method !== "POST" ||
+        e.request.url !== e.resource.resourceType,
+    );
+    if (malformed)
+      return send(
+        res,
+        400,
+        outcome("invalid", "each entry needs a fullUrl and a POST of its resource"),
+      );
+    const ids = new Map(
+      entries.map((e) => [e.fullUrl!, `${e.resource!.resourceType}/rx-${nextId++}`]),
+    );
+    let unresolved = 0;
+    const resolve = (node: unknown): unknown => {
+      if (Array.isArray(node)) return node.map(resolve);
+      if (typeof node !== "object" || node === null) return node;
+      const out: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(node)) {
+        if (k === "reference" && typeof v === "string" && v.startsWith("urn:")) {
+          if (!ids.has(v)) unresolved++;
+          out[k] = ids.get(v) ?? v;
+        } else out[k] = resolve(v);
+      }
+      return out;
+    };
+    const resources = entries.map((e) => ({
+      ...(resolve(e.resource) as Resource),
+      id: ids.get(e.fullUrl!)!.split("/")[1]!,
+    }));
+    if (unresolved)
+      return send(
+        res,
+        400,
+        outcome("invalid", `${unresolved} reference(s) do not resolve in the bundle`),
+      );
+    const patient = resources.find((r) => r.resourceType === "Patient");
+    received.push({ patientId: patient?.id ?? null, resources });
+    if (patient)
+      patients.set(
+        patient.id,
+        resources.filter((r) => MOCK_TYPES.includes(r.resourceType)),
+      );
+    send(res, 200, {
+      resourceType: "Bundle",
+      type: "transaction-response",
+      entry: resources.map((r) => ({
+        response: { status: "201 Created", location: `${r.resourceType}/${r.id}/_history/1` },
+      })),
+    });
+  }
+
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", base);
     res.on("finish", () =>
@@ -435,6 +521,8 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
       return redirect(res, to.href);
     }
     if (req.method === "GET" && url.pathname.startsWith("/fhir/")) return fhir(req, url, res);
+    if (req.method === "POST" && (url.pathname === "/fhir" || url.pathname === "/fhir/"))
+      return void transaction(req, res);
     send(res, 404, "not found", "text/plain");
   });
   await new Promise<void>((resolve) => server.listen(opts.port ?? 0, "127.0.0.1", resolve));
@@ -449,6 +537,7 @@ export async function startMockSmart(opts: MockSmartOptions): Promise<MockSmart>
       `${base}/ehr/launch?app=${encodeURIComponent(app)}&patient=${encodeURIComponent(patientId)}`,
     denyNext: () => void (deny = true),
     requests,
+    received,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((e) => (e ? reject(e) : resolve()));

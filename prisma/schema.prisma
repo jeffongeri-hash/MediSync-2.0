@@ -236,9 +236,17 @@ model TransferJob {
   bundleBytes       Int?           @map("bundle_bytes")
   /// Failure reason (types and counts only, no PHI).
   error             String?
+  /// Phase 7 delivery: the dry-run job a provider approved; this job's bundle must hash the same to be sent.
+  approvedJobId     String?        @map("approved_job_id") @db.Uuid
+  /// Name of the receiving EHR (TRANSFER_TARGETS); null when the bundle was not sent anywhere.
+  target            String?
+  deliveredAt       DateTime?      @map("delivered_at")
+  /// The target's answer: HTTP status, ids it assigned per type, Patient id, or the failure reason. No PHI.
+  delivery          Json?
 
   patient Patient @relation(fields: [patientId], references: [id])
 
+  @@unique([approvedJobId])
   @@index([patientId, createdAt])
   @@map("transfer_jobs")
 }
