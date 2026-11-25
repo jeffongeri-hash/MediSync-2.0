@@ -28,6 +28,12 @@ for (const m of mocks) {
   smartEnv[`SMART_${m.name.toUpperCase()}_ISS`] = `http://127.0.0.1:${m.port}/fhir`;
   smartEnv[`SMART_${m.name.toUpperCase()}_CLIENT_ID`] = m.clientId;
 }
+// The second mock also plays the receiving EHR for transfers (Phase 7).
+Object.assign(smartEnv, {
+  TRANSFER_TARGETS: "ehrb",
+  TRANSFER_EHRB_URL: `http://127.0.0.1:${mocks[1]!.port}/fhir`,
+  TRANSFER_EHRB_LABEL: "EHR B (mock)",
+});
 
 // CI runs against `next start` after `pnpm build`; locally `next dev` is used.
 export default defineConfig({

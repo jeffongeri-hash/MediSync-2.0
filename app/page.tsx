@@ -19,7 +19,7 @@ export default function Home() {
       {demoMode() ? (
         <p>
           <Link className="button" href="/demo">
-            Open the intake demo
+            Open the intake and transfer demo
           </Link>{" "}
           <Link className="button" href="/reconcile">
             Reconcile outside records

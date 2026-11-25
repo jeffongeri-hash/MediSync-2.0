@@ -511,6 +511,14 @@ button.button {
   padding: 0.7rem 0.9rem;
   border-radius: var(--radius);
 }
+/* A delivered transfer: the success counterpart of .notice. */
+.sent {
+  border: 1px solid var(--done);
+  background: var(--done-soft);
+  color: var(--done);
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius);
+}
 .edit-json {
   width: 100%;
   min-height: 24rem;

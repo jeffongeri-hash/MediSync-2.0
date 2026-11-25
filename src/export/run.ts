@@ -115,6 +115,10 @@ export const JOB_VIEW = {
   bundleBytes: true,
   error: true,
   report: true,
+  approvedJobId: true,
+  target: true,
+  deliveredAt: true,
+  delivery: true,
   patient: { select: { sourceSystem: true, sourcePatientId: true } },
 } as const;
 

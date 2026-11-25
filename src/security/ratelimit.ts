@@ -12,6 +12,7 @@ export type Rule = { name: string; limit: number; windowSec: number };
 export const RULES = {
   launch: { name: "launch", limit: 20, windowSec: 60 },
   transferRun: { name: "transfer-run", limit: 10, windowSec: 60 },
+  transferSend: { name: "transfer-send", limit: 10, windowSec: 60 },
   transferRead: { name: "transfer-read", limit: 60, windowSec: 60 },
   decide: { name: "decide", limit: 60, windowSec: 60 },
   writeback: { name: "writeback", limit: 60, windowSec: 60 },

@@ -88,3 +88,4 @@ involved are deferred, not skipped.
 | 38 | HIPAA risk assessment, BAAs with every vendor that touches PHI, SOC 2. | deferred | Not started; no real PHI is in scope (BUILD_PLAN reality checks). |
 | 39 | Epic and Oracle Health security reviews, and an external penetration test. | deferred | They need the Phase 5 sandbox runs first. See "Prepare for EHR review" in the README. |
 | 40 | Backups, restore drills and disaster recovery. | deferred | Supabase-managed. Set them up with the production project. |
+| 41 | Sending a transfer to a real receiving EHR. | deferred | Delivery goes to loopback test servers only (a remote TRANSFER_<NAME>_URL is refused). A real target needs SMART Backend Services (client-credentials JWT) auth, its write scopes, and the vendor review in item 39. |
